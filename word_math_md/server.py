@@ -20,6 +20,7 @@ from word_math_md import __version__
 from word_math_md.config import CleanLevel, ConvertConfig, MathFallback, MathFormat
 from word_math_md.core.cleaner import preprocess_docx
 from word_math_md.inspect import inspect_docx
+from word_math_md.ole_to_latex import convert_ole_docx, format_formula_list
 from word_math_md.pipeline import convert_docx_to_markdown
 
 HOST = os.environ.get("HOST", "0.0.0.0")
@@ -275,7 +276,11 @@ def index() -> str:
       border: 1px solid var(--line); background: #12181f; color: var(--ink);
     }}
     .row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
-    .btn-row {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 16px; }}
+    .btn-row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }}
+    pre.latex {{
+      white-space: pre-wrap; background: #0d1218; border-radius: 8px;
+      padding: 10px 12px; margin: 8px 0 14px; color: #d6e4f0;
+    }}
     button {{
       width: 100%; padding: 12px 16px; border: 0; border-radius: 10px;
       background: linear-gradient(135deg, #3d9cf0, #2a7fd4); color: white;
@@ -339,11 +344,13 @@ def index() -> str:
         <button type="submit" id="btn">开始转换</button>
         <button type="button" class="secondary" id="btnInspect">分析公式与文档结构</button>
         <button type="button" class="secondary" id="btnPreprocess">格式预处理</button>
+        <button type="button" class="secondary" id="btnOle">OLE公式转Latex</button>
       </div>
+      <input type="file" id="oleFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
     </form>
-    <div id="result">选择文件后可转换、分析，或先做「格式预处理」（Tab→空格、删页脚、删空段）。</div>
+    <div id="result">选择文件后可转换、分析，或先做「格式预处理」。点「OLE公式转Latex」会解析 MathType 的 Equation Native（MTEF）并另存 docx，源文件不会被修改。</div>
     <div id="analysis" hidden></div>
-    <footer>API: POST /api/convert · POST /api/inspect · GET /view/&lt;job&gt; · v{__version__}</footer>
+    <footer>API: POST /api/convert · POST /api/inspect · POST /api/ole-to-latex · GET /view/&lt;job&gt; · v{__version__}</footer>
   </main>
   <script>
     const f = document.getElementById('f');
@@ -352,6 +359,8 @@ def index() -> str:
     const btn = document.getElementById('btn');
     const btnInspect = document.getElementById('btnInspect');
     const btnPreprocess = document.getElementById('btnPreprocess');
+    const btnOle = document.getElementById('btnOle');
+    const oleFile = document.getElementById('oleFile');
     function esc(s) {{
       return String(s ?? '').replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}}[c]));
     }}
@@ -470,6 +479,58 @@ def index() -> str:
         btnPreprocess.disabled = false;
       }}
     }});
+    async function runOleConvert(file) {{
+      btnOle.disabled = true;
+      analysis.hidden = false;
+      analysis.textContent = '';
+      result.textContent = '正在从 OLE 对象提取 MathML 并转换为 LaTeX…';
+      const fd = new FormData();
+      fd.append('file', file);
+      try {{
+        const res = await fetch('/api/ole-to-latex', {{ method: 'POST', body: fd }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const items = data.formulas || [];
+        result.innerHTML =
+          'OLE 公式转换完成（源文件未修改）\\n' +
+          '文件: ' + esc(data.file_name) + ' · 共 ' + items.length + ' 个 OLE 公式\\n\\n' +
+          (data.docx_url
+            ? '<a class="dl" href="' + data.docx_url + '">下载转换后的 Word（.docx）</a>\\n'
+            : '') +
+          (data.download_url
+            ? '<a class="dl" href="' + data.download_url + '">下载公式输出清单.txt</a>'
+            : '');
+        if (!items.length) {{
+          analysis.innerHTML = '<p class="summary">文档中没有找到 MathType / Equation OLE 对象。</p>';
+          return;
+        }}
+        let html = '<p class="summary">共提取 <strong>' + items.length + '</strong> 个 OLE 公式</p>';
+        items.forEach((item, i) => {{
+          html += '<h2 class="sec">公式 ' + (i + 1) +
+            (item.source ? ' · ' + esc(item.source) : '') + '</h2>';
+          html += '<pre class="latex">$' + esc(item.latex || '') + '$</pre>';
+        }});
+        analysis.innerHTML = html;
+      }} catch (err) {{
+        result.textContent = 'OLE 转换失败: ' + err.message;
+      }} finally {{
+        btnOle.disabled = false;
+      }}
+    }}
+    btnOle.addEventListener('click', async () => {{
+      const fileInput = f.querySelector('input[name=file]');
+      if (fileInput.files && fileInput.files[0]) {{
+        await runOleConvert(fileInput.files[0]);
+        return;
+      }}
+      oleFile.value = '';
+      oleFile.click();
+    }});
+    oleFile.addEventListener('change', async () => {{
+      if (oleFile.files && oleFile.files[0]) {{
+        await runOleConvert(oleFile.files[0]);
+      }}
+    }});
   </script>
 </body>
 </html>"""
@@ -547,6 +608,55 @@ def download_preprocessed(job: str, name: str):
         filename=name,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+
+
+@app.post("/api/ole-to-latex")
+async def api_ole_to_latex(file: UploadFile = File(...)) -> JSONResponse:
+    if not file.filename or not file.filename.lower().endswith(".docx"):
+        raise HTTPException(400, "Please upload a .docx file")
+    job = f"ole_{os.getpid()}_{re.sub(r'[^A-Za-z0-9_\\-]+', '_', Path(file.filename).stem)[:40]}"
+    dest_dir = WORK / "ole" / job
+    if dest_dir.exists():
+        shutil.rmtree(dest_dir, ignore_errors=True)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    src = dest_dir / Path(file.filename).name
+    src.write_bytes(await file.read())
+    out_name = Path(file.filename).stem + ".ole-latex.docx"
+    out_docx = dest_dir / out_name
+    try:
+        formulas = convert_ole_docx(src, out_docx)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    listing_name = "ole-formulas.txt"
+    listing = dest_dir / listing_name
+    listing.write_text(format_formula_list(formulas), encoding="utf-8")
+    return JSONResponse(
+        {
+            "ok": True,
+            "file_name": file.filename,
+            "count": len(formulas),
+            "formulas": formulas,
+            "docx_url": f"/api/ole-to-latex/{job}/{quote(out_name)}",
+            "download_url": f"/api/ole-to-latex/{job}/{quote(listing_name)}",
+        }
+    )
+
+
+@app.get("/api/ole-to-latex/{job}/{name}")
+def download_ole_list(job: str, name: str):
+    job = _safe_job(job)
+    if ".." in name or "/" in name or "\\" in name:
+        raise HTTPException(400, "Invalid path")
+    path = WORK / "ole" / job / name
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    if name.lower().endswith(".docx"):
+        return FileResponse(
+            path,
+            filename=name,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    return FileResponse(path, filename="公式输出清单.txt", media_type="text/plain; charset=utf-8")
 
 
 @app.post("/api/inspect")

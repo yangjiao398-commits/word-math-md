@@ -10,6 +10,9 @@ python-multipart>=0.0.9
 pydantic>=2.0
 pydantic-settings>=2.0
 markdown>=3.5
+olefile>=0.47
+mathml2latex>=0.2
+beautifulsoup4>=4.12
 
 # Optional (commercial): unlock full Word cleanup / native Markdown export
 # aspose-words>=24.0
