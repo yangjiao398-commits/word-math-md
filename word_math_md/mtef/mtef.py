@@ -645,7 +645,14 @@ class MTEF:
         elif ast.tag == RecordType.CHAR:
             mtcode = ast.value.mtcode
             typeface = ast.value.typeface
-            char = chr(mtcode)
+            # NoMtcode 时 mtcode 保持 0，应改用 8/16 位字库位置
+            code = mtcode or ast.value.bits16 or ast.value.bits8
+            if not code:
+                return '', None
+            try:
+                char = chr(code)
+            except (ValueError, OverflowError):
+                return '', None
 
             # 生成char的一些特殊集
             hexExtend = ''
@@ -659,7 +666,7 @@ class MTEF:
 
             # 生成扩展字符的key
             # hexCode := fmt.Sprintf("%04x", mtcode)
-            hexCode = '%04x' % mtcode
+            hexCode = '%04x' % code
             # hexKey := fmt.Sprintf("char/0x%s%s", hexCode, hexExtend)
             hexKey = 'char/0x%s%s' % (hexCode, hexExtend)
 
@@ -670,6 +677,9 @@ class MTEF:
             if sChar:
                 char = sChar
             else:
+                # 控制字符不能写入 Word XML，也不是可打印公式符号
+                if code < 32 and code not in (9, 10, 13):
+                    return '', None
                 # 如果char是特殊symbol，需要转义
                 sChar = SpecialChar.get(char)
                 if sChar:

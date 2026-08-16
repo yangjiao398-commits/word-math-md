@@ -1,0 +1,14 @@
+{
+  "name": "word-math-md-gaokao-convert",
+  "private": true,
+  "type": "module",
+  "description": "Gaokao-math-assistant Word→Markdown pipeline used by the Convert button",
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "katex": "^0.18.1",
+    "linkedom": "^0.18.13",
+    "mammoth": "^1.12.1",
+    "turndown": "^7.2.4",
+    "tsx": "^4.23.12"
+  }
+}

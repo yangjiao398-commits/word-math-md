@@ -6,25 +6,28 @@ import os
 import re
 import shutil
 import tempfile
-import zipfile
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from word_math_md import __version__
-from word_math_md.config import CleanLevel, ConvertConfig, MathFallback, MathFormat
 from word_math_md.core.cleaner import preprocess_docx
+from word_math_md.gaokao_docx_convert import (
+    convert_docx_like_gaokao,
+    parse_markdown_like_gaokao,
+)
 from word_math_md.inspect import inspect_docx
 from word_math_md.ole_to_latex import convert_ole_docx, format_formula_list
-from word_math_md.pipeline import convert_docx_to_markdown
 
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "3010"))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+KATEX_DIR = PROJECT_ROOT / "node_modules" / "katex" / "dist"
 
 app = FastAPI(
     title="MathDoc Converter",
@@ -312,45 +315,61 @@ def index() -> str:
     .summary {{ color: #e8eef5; line-height: 1.6; margin-bottom: 8px; }}
     a.dl {{ color: var(--accent); }}
     footer {{ margin-top: 28px; color: var(--muted); font-size: 0.8rem; }}
+    #questions {{ margin-top: 22px; }}
+    .q-card {{
+      background: #12181f; border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px; margin-bottom: 14px;
+    }}
+    .q-meta {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
+    .chip {{
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 0.75rem; background: #243140; color: #c5d0dc;
+    }}
+    .chip.ok {{ background: #1b3a2a; color: #7dcea0; }}
+    .chip.warn {{ background: #3a2a12; color: #f0c674; }}
+    .q-card h3 {{ font-size: 0.85rem; color: var(--muted); margin: 0 0 6px; font-weight: 600; }}
+    .q-card h4 {{ font-size: 0.85rem; color: var(--accent); margin: 0 0 6px; font-weight: 600; }}
+    .q-block {{
+      margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+      background: #1a222c; border: 1px solid var(--line);
+    }}
+    .rich-content {{ line-height: 1.75; color: var(--ink); font-size: 0.92rem; }}
+    .rich-content img {{
+      max-width: 100%; max-height: 12rem; height: auto; display: inline-block;
+      vertical-align: middle; border-radius: 6px; border: 1px solid var(--line);
+      background: #fff; margin: 4px 0;
+    }}
+    .rich-content .katex {{ font-size: 1.05em; }}
+    .rich-content .katex-display {{ margin: 8px 0; overflow-x: auto; }}
+    .rich-content table {{ border-collapse: collapse; width: 100%; font-size: 0.86rem; }}
+    .rich-content th, .rich-content td {{
+      border: 1px solid var(--line); padding: 6px 8px; text-align: left;
+    }}
   </style>
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css"/>
 </head>
 <body>
   <main>
     <div class="brand">word-math-md</div>
     <h1>MathDoc Converter</h1>
-    <p class="lead">将含 OMML / MathType / WMF·EMF 的 Word 转为 Markdown + LaTeX。服务端口 {PORT}。</p>
+    <p class="lead">「word转换md文件」与高考数学助理「选择 Word 并转换为 Markdown」同一套流水线：OMML→LaTeX、mammoth、选项公式修复；图片以 data URL 嵌入并下载 .md。服务端口 {PORT}。</p>
     <form id="f">
       <label>Word 文件 (.docx)</label>
       <input type="file" name="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
-      <div class="row">
-        <div>
-          <label>清理级别</label>
-          <select name="clean_level">
-            <option value="aggressive" selected>aggressive</option>
-            <option value="basic">basic</option>
-            <option value="none">none</option>
-          </select>
-        </div>
-        <div>
-          <label>公式降级</label>
-          <select name="math_fallback">
-            <option value="image" selected>image</option>
-            <option value="code">code</option>
-            <option value="placeholder">placeholder</option>
-          </select>
-        </div>
-      </div>
       <div class="btn-row">
-        <button type="submit" id="btn">开始转换</button>
         <button type="button" class="secondary" id="btnInspect">分析公式与文档结构</button>
-        <button type="button" class="secondary" id="btnPreprocess">格式预处理</button>
         <button type="button" class="secondary" id="btnOle">OLE公式转Latex</button>
+        <button type="button" class="secondary" id="btnPreprocess">格式预处理（word元素处理）</button>
+        <button type="submit" id="btn">word转换md文件</button>
+        <button type="button" class="secondary" id="btnParseMd">上传markdown并显示题目</button>
       </div>
       <input type="file" id="oleFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
     </form>
-    <div id="result">选择文件后可转换、分析，或先做「格式预处理」。点「OLE公式转Latex」会解析 MathType 的 Equation Native（MTEF）并另存 docx，源文件不会被修改。</div>
+    <input type="file" id="mdFile" accept=".md,.markdown,.mdown,text/markdown,text/plain" hidden />
+    <div id="result">选择 .docx 后可转换或分析。点「上传markdown并显示题目」可预览试卷题目（与高考数学助理题库相同）。</div>
     <div id="analysis" hidden></div>
-    <footer>API: POST /api/convert · POST /api/inspect · POST /api/ole-to-latex · GET /view/&lt;job&gt; · v{__version__}</footer>
+    <div id="questions" hidden></div>
+    <footer>API: POST /api/convert · POST /api/parse-markdown · POST /api/inspect · POST /api/ole-to-latex · GET /view/&lt;job&gt; · v{__version__}</footer>
   </main>
   <script>
     const f = document.getElementById('f');
@@ -360,7 +379,10 @@ def index() -> str:
     const btnInspect = document.getElementById('btnInspect');
     const btnPreprocess = document.getElementById('btnPreprocess');
     const btnOle = document.getElementById('btnOle');
+    const btnParseMd = document.getElementById('btnParseMd');
     const oleFile = document.getElementById('oleFile');
+    const mdFile = document.getElementById('mdFile');
+    const questions = document.getElementById('questions');
     function esc(s) {{
       return String(s ?? '').replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}}[c]));
     }}
@@ -378,20 +400,42 @@ def index() -> str:
     }}
     f.addEventListener('submit', async (e) => {{
       e.preventDefault();
-      btn.disabled = true; result.textContent = '转换中…';
-      const fd = new FormData(f);
+      const fileInput = f.querySelector('input[name=file]');
+      if (!fileInput.files || !fileInput.files[0]) {{
+        result.textContent = '请先选择一个 .docx 文件。';
+        return;
+      }}
+      btn.disabled = true; result.textContent = '正在转换…';
+      const fd = new FormData();
+      fd.append('file', fileInput.files[0]);
       try {{
         const res = await fetch('/api/convert', {{ method: 'POST', body: fd }});
         const data = await readJson(res);
         if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
-        result.innerHTML =
-          '完成\\n' +
-          '公式: ' + data.formula_count + ' · 图片: ' + data.image_count + '\\n\\n' +
-          '<a class="dl" href="' + data.view_url + '">在网页中查看 Markdown</a>\\n' +
-          '<a class="dl" href="' + data.download_url + '">下载 ZIP（md + assets）</a>\\n\\n' +
-          '<details><summary>文本预览</summary><pre>' +
-          (data.preview || '').replace(/[<]/g, s => ({{'<':'&lt;','>':'&gt;'}})[s]) +
-          '</pre></details>';
+        if (data.download_url) {{
+          const a = document.createElement('a');
+          a.href = data.download_url;
+          a.download = data.file_name || 'converted.md';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }}
+        let html = '已将 Word 转换为 Markdown，并开始下载：' + esc(data.file_name) + '\\n';
+        if (data.math_converted > 0) {{
+          html += '其中转换了 ' + data.math_converted + ' 处公式为 LaTeX。\\n';
+        }}
+        if (data.image_count > 0) {{
+          html += '已嵌入 ' + data.image_count + ' 张图片（data URL），打开该 md 即可显示配图。\\n';
+        }}
+        (data.warnings || []).forEach(w => {{ html += esc(w) + '\\n'; }});
+        html += '\\n<a class="dl" href="' + data.download_url + '">再次下载 Markdown</a>';
+        if (data.view_url) {{
+          html += '\\n<a class="dl" href="' + data.view_url + '">在网页中查看 Markdown</a>';
+        }}
+        if (data.preview) {{
+          html += '\\n\\n<details><summary>文本预览</summary><pre>' + esc(data.preview) + '</pre></details>';
+        }}
+        result.innerHTML = html;
       }} catch (err) {{
         result.textContent = '错误: ' + err.message;
       }} finally {{
@@ -529,6 +573,68 @@ def index() -> str:
     oleFile.addEventListener('change', async () => {{
       if (oleFile.files && oleFile.files[0]) {{
         await runOleConvert(oleFile.files[0]);
+      }}
+    }});
+    function renderQuestions(data) {{
+      const qs = data.questions || [];
+      const notices = data.notices || [];
+      let html = notices.map(n => '<p class="summary">' + esc(n.text) + '</p>').join('');
+      if (!qs.length) {{
+        html += '<p>未能解析出题目，请检查题号与【答案】【分析】【详解】标记。</p>';
+        questions.innerHTML = html;
+        questions.hidden = false;
+        return;
+      }}
+      html += qs.map(q => {{
+        let card = '<article class="q-card"><div class="q-meta">';
+        card += '<span class="chip">第 ' + esc(q.index) + ' 题</span>';
+        card += q.answerHtml ? '<span class="chip ok">含答案</span>' : '<span class="chip warn">缺答案</span>';
+        if (q.analysisHtml) card += '<span class="chip">含分析</span>';
+        if (q.detailHtml) card += '<span class="chip">含详解</span>';
+        card += '</div><h3>题干</h3><div class="rich-content">' + (q.stemHtml || '') + '</div>';
+        if (q.answerHtml) {{
+          card += '<div class="q-block"><h4>【答案】</h4><div class="rich-content">' + q.answerHtml + '</div></div>';
+        }}
+        if (q.analysisHtml) {{
+          card += '<div class="q-block"><h4>【分析】</h4><div class="rich-content">' + q.analysisHtml + '</div></div>';
+        }}
+        if (q.detailHtml) {{
+          card += '<div class="q-block"><h4>【详解】</h4><div class="rich-content">' + q.detailHtml + '</div></div>';
+        }}
+        card += '</article>';
+        return card;
+      }}).join('');
+      questions.innerHTML = html;
+      questions.hidden = false;
+    }}
+    async function runParseMarkdown(file) {{
+      btnParseMd.disabled = true;
+      questions.hidden = false;
+      questions.innerHTML = '';
+      result.textContent = '正在解析 Markdown 并渲染题目…';
+      const fd = new FormData();
+      fd.append('file', file);
+      try {{
+        const res = await fetch('/api/parse-markdown', {{ method: 'POST', body: fd }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        result.textContent = '已解析 ' + esc(data.file_name) + '，识别到 ' +
+          (data.questions || []).length + ' 题。';
+        renderQuestions(data);
+      }} catch (err) {{
+        result.textContent = '解析失败: ' + err.message;
+        questions.innerHTML = '';
+      }} finally {{
+        btnParseMd.disabled = false;
+      }}
+    }}
+    btnParseMd.addEventListener('click', () => {{
+      mdFile.value = '';
+      mdFile.click();
+    }});
+    mdFile.addEventListener('change', async () => {{
+      if (mdFile.files && mdFile.files[0]) {{
+        await runParseMarkdown(mdFile.files[0]);
       }}
     }});
   </script>
@@ -679,14 +785,7 @@ async def api_inspect(file: UploadFile = File(...)) -> JSONResponse:
 
 
 @app.post("/api/convert")
-async def api_convert(
-    file: UploadFile = File(...),
-    clean_level: str = Form("aggressive"),
-    math_fallback: str = Form("image"),
-    keep_footnotes: bool = Form(True),
-    remove_textboxes: bool = Form(True),
-    backend: str = Form("auto"),
-) -> JSONResponse:
+async def api_convert(file: UploadFile = File(...)) -> JSONResponse:
     if not file.filename or not file.filename.lower().endswith(".docx"):
         raise HTTPException(400, "Please upload a .docx file")
 
@@ -697,51 +796,31 @@ async def api_convert(
     dest.mkdir(parents=True, exist_ok=True)
 
     src = dest / Path(file.filename).name
-    content = await file.read()
-    src.write_bytes(content)
-
+    src.write_bytes(await file.read())
     out_md = dest / (src.stem + ".md")
-    assets = dest / "assets"
 
     try:
-        cfg = ConvertConfig(
-            input_path=src,
-            output_path=out_md,
-            image_dir=assets,
-            clean_level=CleanLevel(clean_level),
-            math_fallback=MathFallback(math_fallback),
-            math_format=MathFormat.LATEX,
-            keep_footnotes=keep_footnotes,
-            remove_textboxes=remove_textboxes,
-            backend=backend,
-            debug=False,
-        )
-        ir = convert_docx_to_markdown(cfg)
+        meta = convert_docx_like_gaokao(src, out_md)
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
 
     _PREVIEW_ROOTS[job] = dest
 
-    zip_path = dest / f"{src.stem}.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(out_md, out_md.name)
-        if assets.exists():
-            for p in assets.rglob("*"):
-                if p.is_file():
-                    zf.write(p, f"assets/{p.relative_to(assets).as_posix()}")
-
-    preview = out_md.read_text(encoding="utf-8", errors="ignore")
+    file_name = str(meta.get("fileName") or out_md.name)
+    preview = out_md.read_text(encoding="utf-8-sig", errors="ignore")
     if len(preview) > 4000:
         preview = preview[:4000] + "\n…(truncated)"
 
     return JSONResponse(
         {
             "ok": True,
-            "formula_count": len(ir.formulas),
-            "image_count": len(ir.images),
+            "file_name": file_name,
+            "math_converted": int(meta.get("mathConverted") or 0),
+            "image_count": int(meta.get("imageCount") or 0),
+            "warnings": list(meta.get("warnings") or []),
             "job": job,
             "view_url": f"/view/{job}",
-            "download_url": f"/api/download/{quote(zip_path.name)}?job={job}",
+            "download_url": f"/api/download/{quote(out_md.name)}?job={job}",
             "preview": preview,
         }
     )
@@ -753,11 +832,40 @@ def download(name: str, job: str) -> FileResponse:
     root = _PREVIEW_ROOTS.get(job) or (PREVIEWS / job) or (WORK / job)
     path = Path(root) / name
     if not path.exists():
-        # also check WORK legacy jobs
         path = WORK / job / name
     if not path.exists():
         raise HTTPException(404, "File not found")
-    return FileResponse(path, filename=name, media_type="application/zip")
+    media = (
+        "text/markdown; charset=utf-8"
+        if name.lower().endswith(".md")
+        else "application/zip"
+    )
+    return FileResponse(path, filename=name, media_type=media)
+
+
+@app.post("/api/parse-markdown")
+async def api_parse_markdown(file: UploadFile = File(...)) -> JSONResponse:
+    name = file.filename or ""
+    if not re.search(r"\.(md|markdown|mdown)$", name, re.I):
+        raise HTTPException(400, "请上传 Markdown 文件（.md）")
+    job = f"md_{os.getpid()}_{re.sub(r'[^A-Za-z0-9_\\-]+', '_', Path(name).stem)[:40]}"
+    dest = WORK / "parse" / job
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    src = dest / Path(name).name
+    src.write_bytes(await file.read())
+    try:
+        data = parse_markdown_like_gaokao(src)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    data["ok"] = True
+    data["file_name"] = name
+    return JSONResponse(data)
+
+
+if KATEX_DIR.is_dir():
+    app.mount("/vendor/katex", StaticFiles(directory=str(KATEX_DIR)), name="katex")
 
 
 def run() -> None:

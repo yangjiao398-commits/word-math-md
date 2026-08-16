@@ -22,6 +22,18 @@ W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 REL_PKG = "http://schemas.openxmlformats.org/package/2006/relationships"
 
+# XML 1.0 / lxml 不允许 NULL 与多数控制字符写入节点文本
+_XML_ILLEGAL = re.compile(
+    r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x84\x86-\x9F\uFDD0-\uFDEF\uFFFE\uFFFF]"
+)
+
+
+def xml_safe_text(text: str) -> str:
+    """Strip characters that lxml refuses to put in XML text nodes."""
+    if not text:
+        return ""
+    return _XML_ILLEGAL.sub("", text)
+
 
 def _local(tag: str) -> str:
     if "}" in tag:
@@ -167,7 +179,7 @@ def _cleanup_mtef_latex(text: str) -> str:
     )
     s = re.sub(r"\{\s*\\rm\{\s*\\pi\s*\}\s*\}", r"\\pi", s, flags=re.I)
     s = re.sub(r"\\sqrt\s*\[\s*\]\s*\{", r"\\sqrt{", s)
-    return s
+    return xml_safe_text(s)
 
 
 def ole_to_latex(ole_bin: bytes) -> str:
@@ -186,8 +198,10 @@ def ole_to_latex(ole_bin: bytes) -> str:
 
 def _convert_ole_bytes(ole_bin: bytes, source_name: str) -> dict[str, str | None]:
     mathml = extract_mathml_from_ole(ole_bin)
+    if mathml:
+        mathml = xml_safe_text(mathml)
     try:
-        latex_code = ole_to_latex(ole_bin)
+        latex_code = xml_safe_text(ole_to_latex(ole_bin))
         return {"mathml": mathml, "latex": latex_code, "source": source_name}
     except Exception:
         if mathml:
@@ -203,7 +217,7 @@ def _word_part(target: str) -> str:
 def _make_latex_text(latex: str):
     el = etree.Element(f"{{{W_NS}}}t")
     el.set(f"{{{XML_NS}}}space", "preserve")
-    el.text = f"${latex}$"
+    el.text = f"${xml_safe_text(latex)}$"
     return el
 
 
@@ -252,7 +266,11 @@ def _replace_ole_in_xml(
 
         parent = replace.getparent()
         if parent is not None:
-            parent.replace(replace, _make_latex_text(str(item.get("latex") or "")))
+            try:
+                parent.replace(replace, _make_latex_text(str(item.get("latex") or "")))
+            except ValueError:
+                item["latex"] = "【无法写入】"
+                parent.replace(replace, _make_latex_text("【无法写入】"))
 
     return (
         etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True),

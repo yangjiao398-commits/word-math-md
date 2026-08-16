@@ -114,6 +114,20 @@ def test_ole_extract_from_synthetic_docx(tmp_path):
     assert "$【无法提取】$" in xml
 
 
+def test_xml_safe_text_strips_null_and_controls():
+    from lxml import etree
+    from word_math_md.ole_to_latex import _make_latex_text, xml_safe_text
+
+    dirty = "a\x00b\x01c\x1fd"
+    assert xml_safe_text(dirty) == "abcd"
+    el = _make_latex_text("x\x00^2")
+    assert el.text == "$x^2$"
+    # lxml must accept the node (this is the original crash)
+    xml = etree.tostring(el, encoding="unicode")
+    assert "$x^2$" in xml
+    assert "\x00" not in xml
+
+
 def test_mtef_equation_native_to_latex():
     from word_math_md.ole_to_latex import _convert_ole_bytes
 
