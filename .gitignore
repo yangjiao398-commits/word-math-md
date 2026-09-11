@@ -42,6 +42,7 @@ uploads/
 *.docx.bak
 clean.docx
 raw.md
+supabase/.temp/
 
 # Test artifacts
 .pytest_cache/

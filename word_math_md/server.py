@@ -9,7 +9,8 @@ import tempfile
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +24,14 @@ from word_math_md.gaokao_docx_convert import (
 )
 from word_math_md.inspect import inspect_docx
 from word_math_md.ole_to_latex import convert_ole_docx, format_formula_list
+from word_math_md.exam_bank import (
+    exam_bank_configured,
+    get_paper_questions,
+    import_markdown_file,
+    list_papers,
+)
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "3010"))
@@ -365,11 +374,22 @@ def index() -> str:
       </div>
       <input type="file" id="oleFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
     </form>
+    <form id="bankForm" style="margin-top:16px">
+      <label>试卷编号（导入题库用，可空则用文件名）</label>
+      <input type="text" id="paperCode" placeholder="如 SZ-G1-2024-QM-01" />
+      <label>试卷名称</label>
+      <input type="text" id="paperTitle" placeholder="如 2024学年高一上学期期末数学" />
+      <div class="btn-row">
+        <button type="button" class="secondary" id="btnImportMd">导入 Markdown 到题库</button>
+        <button type="button" class="secondary" id="btnListPapers">查看已入库试卷</button>
+      </div>
+    </form>
     <input type="file" id="mdFile" accept=".md,.markdown,.mdown,text/markdown,text/plain" hidden />
-    <div id="result">选择 .docx 后可转换或分析。点「上传markdown并显示题目」可预览试卷题目（与高考数学助理题库相同）。</div>
+    <input type="file" id="importMdFile" accept=".md,.markdown,.mdown,text/markdown,text/plain" hidden />
+    <div id="result">选择 .docx 后可转换或分析。点「上传markdown并显示题目」可预览；「导入 Markdown 到题库」会按题号写入 Supabase。</div>
     <div id="analysis" hidden></div>
     <div id="questions" hidden></div>
-    <footer>API: POST /api/convert · POST /api/parse-markdown · POST /api/inspect · POST /api/ole-to-latex · GET /view/&lt;job&gt; · v{__version__}</footer>
+    <footer>API: POST /api/convert · POST /api/parse-markdown · POST /api/exam-bank/import-markdown · GET /api/exam-bank/papers · v{__version__}</footer>
   </main>
   <script>
     const f = document.getElementById('f');
@@ -380,8 +400,11 @@ def index() -> str:
     const btnPreprocess = document.getElementById('btnPreprocess');
     const btnOle = document.getElementById('btnOle');
     const btnParseMd = document.getElementById('btnParseMd');
+    const btnImportMd = document.getElementById('btnImportMd');
+    const btnListPapers = document.getElementById('btnListPapers');
     const oleFile = document.getElementById('oleFile');
     const mdFile = document.getElementById('mdFile');
+    const importMdFile = document.getElementById('importMdFile');
     const questions = document.getElementById('questions');
     function esc(s) {{
       return String(s ?? '').replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}}[c]));
@@ -637,6 +660,71 @@ def index() -> str:
         await runParseMarkdown(mdFile.files[0]);
       }}
     }});
+    async function runImportMarkdown(file) {{
+      btnImportMd.disabled = true;
+      questions.hidden = true;
+      result.textContent = '正在解析并写入 Supabase 题库…';
+      const fd = new FormData();
+      fd.append('file', file);
+      const code = document.getElementById('paperCode').value.trim();
+      const title = document.getElementById('paperTitle').value.trim();
+      if (code) fd.append('paper_code', code);
+      if (title) fd.append('paper_title', title);
+      try {{
+        const res = await fetch('/api/exam-bank/import-markdown', {{ method: 'POST', body: fd }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const qs = data.questions || [];
+        result.textContent =
+          (data.replaced ? '已覆盖同编号试卷。\\n' : '已新建试卷。\\n') +
+          '编号: ' + esc(data.paper_code) + '\\n名称: ' + esc(data.title) +
+          '\\n题目: ' + data.question_count + ' · 图片: ' + data.asset_count;
+        let html = qs.map(q => {{
+          return '<article class="q-card"><div class="q-meta">' +
+            '<span class="chip">第 ' + esc(q.question_no) + ' 题</span>' +
+            '<span class="chip">' + esc(q.type_code) + '</span>' +
+            (q.score != null ? '<span class="chip">' + esc(q.score) + ' 分</span>' : '') +
+            '<span class="chip">选项 ' + esc(q.option_count) + '</span>' +
+            '</div></article>';
+        }}).join('');
+        questions.innerHTML = html || '';
+        questions.hidden = !html;
+      }} catch (err) {{
+        result.textContent = '入库失败: ' + err.message;
+      }} finally {{
+        btnImportMd.disabled = false;
+      }}
+    }}
+    btnImportMd.addEventListener('click', () => {{
+      importMdFile.value = '';
+      importMdFile.click();
+    }});
+    importMdFile.addEventListener('change', async () => {{
+      if (importMdFile.files && importMdFile.files[0]) {{
+        await runImportMarkdown(importMdFile.files[0]);
+      }}
+    }});
+    btnListPapers.addEventListener('click', async () => {{
+      btnListPapers.disabled = true;
+      try {{
+        const res = await fetch('/api/exam-bank/papers');
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const rows = data.papers || [];
+        result.textContent = '题库中共 ' + rows.length + ' 套试卷。';
+        questions.innerHTML = rows.map(p =>
+          '<article class="q-card"><div class="q-meta">' +
+          '<span class="chip">' + esc(p.paper_code) + '</span>' +
+          '<span class="chip">题目 ' + esc(p.question_count) + '</span></div>' +
+          '<div class="rich-content">' + esc(p.title) + '</div></article>'
+        ).join('') || '<p>题库还是空的。</p>';
+        questions.hidden = false;
+      }} catch (err) {{
+        result.textContent = '读取题库失败: ' + err.message;
+      }} finally {{
+        btnListPapers.disabled = false;
+      }}
+    }});
   </script>
 </body>
 </html>"""
@@ -861,6 +949,66 @@ async def api_parse_markdown(file: UploadFile = File(...)) -> JSONResponse:
         raise HTTPException(500, str(exc)) from exc
     data["ok"] = True
     data["file_name"] = name
+    return JSONResponse(data)
+
+
+@app.get("/api/exam-bank/status")
+def exam_bank_status() -> JSONResponse:
+    return JSONResponse({"ok": True, "configured": exam_bank_configured()})
+
+
+@app.post("/api/exam-bank/import-markdown")
+async def api_import_markdown(
+    file: UploadFile = File(...),
+    paper_code: str | None = Form(None),
+    paper_title: str | None = Form(None),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(
+            503,
+            "未配置 Supabase。请先运行 python scripts/setup_supabase.py，或在 .env 填写 SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY。",
+        )
+    name = file.filename or ""
+    if not re.search(r"\.(md|markdown|mdown)$", name, re.I):
+        raise HTTPException(400, "请上传 Markdown 文件（.md）")
+    job = f"imp_{os.getpid()}_{re.sub(r'[^A-Za-z0-9_\\-]+', '_', Path(name).stem)[:40]}"
+    dest = WORK / "import" / job
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    src = dest / Path(name).name
+    src.write_bytes(await file.read())
+    try:
+        data = import_markdown_file(src, paper_code=paper_code, title=paper_title)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    data["ok"] = True
+    data["file_name"] = name
+    return JSONResponse(data)
+
+
+@app.get("/api/exam-bank/papers")
+def api_list_papers() -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        papers = list_papers()
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "papers": papers})
+
+
+@app.get("/api/exam-bank/papers/{paper_id}")
+def api_paper_detail(paper_id: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        data = get_paper_questions(paper_id)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    data["ok"] = True
     return JSONResponse(data)
 
 
