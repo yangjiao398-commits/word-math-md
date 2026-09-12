@@ -58,7 +58,9 @@ CHAR_MAP = {
 }
 
 
-def _local(tag: str) -> str:
+def _local(tag) -> str:
+    if not isinstance(tag, str):
+        return ""
     if "}" in tag:
         return tag.rsplit("}", 1)[-1]
     return tag.split(":")[-1]

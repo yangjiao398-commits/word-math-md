@@ -63,6 +63,7 @@ def test_ole_extract_from_synthetic_docx(tmp_path):
             xmlns:o="urn:schemas-microsoft-com:office:office"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:body>
+    <!-- Word 导出常见注释：lxml 里 .tag 不是字符串 -->
     <w:p>
       <w:r>
         <w:object>

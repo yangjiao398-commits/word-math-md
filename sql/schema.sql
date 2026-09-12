@@ -29,6 +29,24 @@ CREATE TABLE IF NOT EXISTS papers (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS knowledge_points (
+  code TEXT PRIMARY KEY,
+  description TEXT NOT NULL,
+  semester TEXT NOT NULL DEFAULT '',
+  major_category TEXT NOT NULL DEFAULT '',
+  minor_category TEXT NOT NULL DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE knowledge_points ADD COLUMN IF NOT EXISTS semester TEXT NOT NULL DEFAULT '';
+ALTER TABLE knowledge_points ADD COLUMN IF NOT EXISTS major_category TEXT NOT NULL DEFAULT '';
+ALTER TABLE knowledge_points ADD COLUMN IF NOT EXISTS minor_category TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS knowledge_points_semester ON knowledge_points (semester);
+CREATE INDEX IF NOT EXISTS knowledge_points_major ON knowledge_points (major_category);
+
 CREATE TABLE IF NOT EXISTS questions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   paper_id UUID NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
@@ -41,12 +59,26 @@ CREATE TABLE IF NOT EXISTS questions (
   answer_md TEXT NOT NULL DEFAULT '',
   analysis_md TEXT NOT NULL DEFAULT '',
   solution_md TEXT NOT NULL DEFAULT '',
+  knowledge_codes TEXT[] NOT NULL DEFAULT '{}',
   extra JSONB NOT NULL DEFAULT '{}'::jsonb,
   UNIQUE (paper_id, question_no)
 );
 
+-- Existing databases created before knowledge_codes was added.
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS knowledge_codes TEXT[] NOT NULL DEFAULT '{}';
+
 CREATE INDEX IF NOT EXISTS questions_paper_order ON questions (paper_id, sort_order);
 CREATE INDEX IF NOT EXISTS questions_type ON questions (type_code);
+CREATE INDEX IF NOT EXISTS questions_knowledge_codes ON questions USING GIN (knowledge_codes);
+
+CREATE TABLE IF NOT EXISTS question_knowledge_points (
+  question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+  knowledge_code TEXT NOT NULL REFERENCES knowledge_points(code),
+  sort_order INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (question_id, knowledge_code)
+);
+
+CREATE INDEX IF NOT EXISTS qkp_knowledge ON question_knowledge_points (knowledge_code);
 
 CREATE TABLE IF NOT EXISTS question_options (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -76,5 +108,7 @@ ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE knowledge_points ENABLE ROW LEVEL SECURITY;
+ALTER TABLE question_knowledge_points ENABLE ROW LEVEL SECURITY;
 
 -- Backend uses the service role (bypasses RLS). Anon has no table access.

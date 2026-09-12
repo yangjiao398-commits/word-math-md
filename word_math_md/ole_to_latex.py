@@ -35,7 +35,10 @@ def xml_safe_text(text: str) -> str:
     return _XML_ILLEGAL.sub("", text)
 
 
-def _local(tag: str) -> str:
+def _local(tag) -> str:
+    # lxml 注释 / PI 的 .tag 是 Cython 函数，不能用 `in`
+    if not isinstance(tag, str):
+        return ""
     if "}" in tag:
         return tag.rsplit("}", 1)[-1]
     return tag.split(":")[-1]

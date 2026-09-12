@@ -14,15 +14,23 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
+ENV_PATH = PROJECT_ROOT / ".env"
+load_dotenv(ENV_PATH)
+
+
+def _load_env() -> None:
+    load_dotenv(ENV_PATH, override=False)
+    if not (os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_ROLE_KEY")):
+        load_dotenv(ENV_PATH, override=True)
 
 BUCKET = "exam-assets"
-SECTION_MARKERS = ("【答案】", "【解析】", "【分析】", "【详解】")
+SECTION_MARKERS = ("【答案】", "【解析】", "【分析】", "【详解】", "【知识点】")
 MARKER_TO_KEY = {
     "【答案】": "answer",
     "【解析】": "analysis",
     "【分析】": "analysis",
     "【详解】": "detail",
+    "【知识点】": "knowledge",
 }
 QUESTION_RE = re.compile(
     r"(?:^|\n)\s*(?:#{1,6}\s*)?(?:第\s*(\d+)\s*题|(\d+)\s*(?:\\\.|[.．、]))(?:\s+|(?=\S))"
@@ -36,6 +44,11 @@ DATA_IMG_RE = re.compile(
 )
 MD_IMG_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 HTML_TAG_RE = re.compile(r"<[^>]+>")
+KNOWLEDGE_SPLIT_RE = re.compile(r"[；;、，,\n]+")
+KNOWLEDGE_PAIR_RE = re.compile(
+    r"^(?P<code>[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*)(?:\s+|[:：]\s*)(?P<desc>.+)$"
+)
+KNOWLEDGE_CODE_RE = re.compile(r"^(?P<code>[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*)$")
 
 
 @dataclass
@@ -43,6 +56,12 @@ class ParsedOption:
     label: str
     content_md: str
     sort_order: int
+
+
+@dataclass
+class ParsedKnowledge:
+    code: str
+    description: str
 
 
 @dataclass
@@ -57,6 +76,7 @@ class ParsedQuestion:
     analysis_md: str
     solution_md: str
     options: list[ParsedOption] = field(default_factory=list)
+    knowledge_points: list[ParsedKnowledge] = field(default_factory=list)
 
 
 @dataclass
@@ -72,6 +92,15 @@ def _slug_code(name: str) -> str:
     stem = Path(name).stem.strip() or "paper"
     slug = re.sub(r"[^\w\u4e00-\u9fff\-]+", "-", stem).strip("-")
     return (slug or "paper")[:80]
+
+
+def _storage_prefix(paper_code: str) -> str:
+    """ASCII-only folder for Storage. Supabase rejects keys with CJK characters."""
+    digest = hashlib.sha1((paper_code or "paper").encode("utf-8")).hexdigest()[:12]
+    ascii_part = re.sub(r"[^A-Za-z0-9]+", "-", paper_code or "").strip("-")[:24].strip("-")
+    if ascii_part:
+        return f"{ascii_part}-{digest}"
+    return f"paper-{digest}"
 
 
 def strip_text(md: str) -> str:
@@ -95,9 +124,9 @@ def split_sections(block: str) -> dict[str, str]:
             start = idx + len(marker)
     cuts.sort(key=lambda x: x[1])
     if not cuts:
-        return {"stem": block.strip(), "answer": "", "analysis": "", "detail": ""}
+        return {"stem": block.strip(), "answer": "", "analysis": "", "detail": "", "knowledge": ""}
     stem = block[: cuts[0][1]].strip()
-    buckets = {"answer": "", "analysis": "", "detail": ""}
+    buckets = {"answer": "", "analysis": "", "detail": "", "knowledge": ""}
     for i, (key, pos, mlen) in enumerate(cuts):
         end = cuts[i + 1][1] if i + 1 < len(cuts) else len(block)
         content = block[pos + mlen : end].strip()
@@ -152,6 +181,33 @@ def split_by_question_number(text: str) -> list[tuple[int, str]]:
     return out
 
 
+def parse_knowledge_points(text: str) -> list[ParsedKnowledge]:
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    seen: set[str] = set()
+    out: list[ParsedKnowledge] = []
+    for part in KNOWLEDGE_SPLIT_RE.split(raw):
+        item = part.strip().strip("。.;；")
+        if not item:
+            continue
+        pair = KNOWLEDGE_PAIR_RE.match(item)
+        code = ""
+        description = ""
+        if pair:
+            code = pair.group("code").strip()
+            description = pair.group("desc").strip()
+        else:
+            only = KNOWLEDGE_CODE_RE.match(item)
+            if only:
+                code = only.group("code").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        out.append(ParsedKnowledge(code=code, description=description))
+    return out
+
+
 def extract_score(text: str) -> float | None:
     m = SCORE_RE.search(text)
     if not m:
@@ -185,7 +241,7 @@ def guess_type(stem: str, answer: str, options: list[ParsedOption]) -> str:
         if len(unique) >= 2:
             return "multi_choice"
         return "single_choice"
-    if re.search(r"_{3,}|\\qquad|\\blank|填空", stem):
+    if re.search(r"_{3,}|(?:\\_){3,}|\\qquad|\\blank|填空", stem):
         return "fill_blank"
     return "solution"
 
@@ -221,6 +277,7 @@ def parse_markdown_paper(
                 analysis_md=sections["analysis"],
                 solution_md=sections["detail"],
                 options=options,
+                knowledge_points=parse_knowledge_points(sections.get("knowledge", "")),
             )
         )
     questions.sort(key=lambda q: q.sort_order)
@@ -234,10 +291,12 @@ def parse_markdown_paper(
 
 
 def exam_bank_configured() -> bool:
+    _load_env()
     return bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
 
 
 def _client():
+    _load_env()
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
@@ -285,7 +344,7 @@ def _guess_ext(mime: str) -> str:
 
 def _upload_bytes(client, paper_code: str, data: bytes, mime: str) -> str:
     digest = hashlib.sha1(data).hexdigest()
-    key = f"{paper_code}/{digest[:16]}.{_guess_ext(mime)}"
+    key = f"{_storage_prefix(paper_code)}/{digest[:16]}.{_guess_ext(mime)}"
     try:
         client.storage.from_(BUCKET).upload(
             key,
@@ -357,6 +416,39 @@ def rewrite_images(
     return md, uploaded
 
 
+def upsert_knowledge_points(client, items: list[ParsedKnowledge]) -> None:
+    unique: dict[str, ParsedKnowledge] = {}
+    for item in items:
+        code = (item.code or "").strip()
+        if not code:
+            continue
+        prev = unique.get(code)
+        if prev is None or (item.description and not prev.description):
+            unique[code] = ParsedKnowledge(code=code, description=(item.description or "").strip())
+    if not unique:
+        return
+    codes = list(unique)
+    existing = (
+        client.table("knowledge_points")
+        .select("code,description")
+        .in_("code", codes)
+        .execute()
+    )
+    have = {row["code"]: (row.get("description") or "") for row in (existing.data or [])}
+    to_insert = []
+    now = datetime.now(timezone.utc).isoformat()
+    for code, item in unique.items():
+        description = item.description or code
+        if code not in have:
+            to_insert.append({"code": code, "description": description})
+        elif item.description and item.description != have[code]:
+            client.table("knowledge_points").update(
+                {"description": item.description, "updated_at": now}
+            ).eq("code", code).execute()
+    if to_insert:
+        client.table("knowledge_points").insert(to_insert).execute()
+
+
 def import_parsed_paper(paper: ParsedPaper, asset_dir: Path | None = None) -> dict[str, Any]:
     client = _client()
     _ensure_bucket(client)
@@ -401,8 +493,14 @@ def import_parsed_paper(paper: ParsedPaper, asset_dir: Path | None = None) -> di
         inserted = client.table("papers").insert(payload).execute()
         paper_id = inserted.data[0]["id"]
 
+    upsert_knowledge_points(
+        client,
+        [kp for q in paper.questions for kp in q.knowledge_points],
+    )
+
     question_rows = []
     for q in paper.questions:
+        knowledge_codes = [kp.code for kp in q.knowledge_points]
         q_ins = (
             client.table("questions")
             .insert(
@@ -417,6 +515,7 @@ def import_parsed_paper(paper: ParsedPaper, asset_dir: Path | None = None) -> di
                     "answer_md": q.answer_md,
                     "analysis_md": q.analysis_md,
                     "solution_md": q.solution_md,
+                    "knowledge_codes": knowledge_codes,
                     "extra": {},
                 }
             )
@@ -430,8 +529,20 @@ def import_parsed_paper(paper: ParsedPaper, asset_dir: Path | None = None) -> di
                 "type_code": q.type_code,
                 "score": q.score,
                 "option_count": len(q.options),
+                "knowledge_codes": knowledge_codes,
             }
         )
+        if knowledge_codes:
+            client.table("question_knowledge_points").insert(
+                [
+                    {
+                        "question_id": qid,
+                        "knowledge_code": kp.code,
+                        "sort_order": i,
+                    }
+                    for i, kp in enumerate(q.knowledge_points)
+                ]
+            ).execute()
         if q.options:
             client.table("question_options").insert(
                 [
@@ -518,7 +629,7 @@ def get_paper_questions(paper_id: str) -> dict[str, Any]:
     client = _client()
     paper = (
         client.table("papers")
-        .select("id,paper_code,title,source_filename,created_at,updated_at")
+        .select("id,paper_code,title,source_filename,source_md,created_at,updated_at")
         .eq("id", paper_id)
         .single()
         .execute()
@@ -527,7 +638,7 @@ def get_paper_questions(paper_id: str) -> dict[str, Any]:
         client.table("questions")
         .select(
             "id,question_no,sort_order,type_code,stem_md,stem_text,score,"
-            "answer_md,analysis_md,solution_md"
+            "answer_md,analysis_md,solution_md,knowledge_codes"
         )
         .eq("paper_id", paper_id)
         .order("sort_order")
@@ -546,6 +657,167 @@ def get_paper_questions(paper_id: str) -> dict[str, Any]:
         )
         for opt in opts.data or []:
             options_by_q.setdefault(opt["question_id"], []).append(opt)
+    links_by_q: dict[str, list] = {qid: [] for qid in ids}
+    if ids:
+        links = (
+            client.table("question_knowledge_points")
+            .select("question_id,knowledge_code,sort_order")
+            .in_("question_id", ids)
+            .order("sort_order")
+            .execute()
+        )
+        codes = sorted(
+            {row["knowledge_code"] for row in (links.data or []) if row.get("knowledge_code")}
+        )
+        meta_by_code: dict[str, dict[str, str]] = {}
+        if codes:
+            kps = (
+                client.table("knowledge_points")
+                .select("code,description,semester,major_category,minor_category")
+                .in_("code", codes)
+                .execute()
+            )
+            meta_by_code = {
+                row["code"]: {
+                    "description": row.get("description") or "",
+                    "semester": row.get("semester") or "",
+                    "major_category": row.get("major_category") or "",
+                    "minor_category": row.get("minor_category") or "",
+                }
+                for row in (kps.data or [])
+            }
+        for row in links.data or []:
+            meta = meta_by_code.get(row["knowledge_code"], {})
+            links_by_q.setdefault(row["question_id"], []).append(
+                {
+                    "code": row["knowledge_code"],
+                    "description": meta.get("description", ""),
+                    "semester": meta.get("semester", ""),
+                    "major_category": meta.get("major_category", ""),
+                    "minor_category": meta.get("minor_category", ""),
+                    "sort_order": row.get("sort_order", 0),
+                }
+            )
     for q in qrows:
         q["options"] = options_by_q.get(q["id"], [])
+        q["knowledge_points"] = links_by_q.get(q["id"], [])
+        q["knowledge_codes"] = q.get("knowledge_codes") or [
+            item["code"] for item in q["knowledge_points"]
+        ]
     return {"paper": paper.data, "questions": qrows}
+
+
+def questions_to_markdown(questions: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for q in questions:
+        stem = (q.get("stem_md") or "").strip()
+        opt_lines = []
+        for opt in q.get("options") or []:
+            label = (opt.get("label") or "").strip()
+            content = (opt.get("content_md") or "").strip()
+            if label:
+                opt_lines.append(f"{label}. {content}".rstrip())
+        body = stem
+        if opt_lines:
+            opts = "\n".join(opt_lines)
+            body = f"{stem}\n{opts}".strip() if stem else opts
+        if (q.get("answer_md") or "").strip():
+            body += f"\n\n【答案】{(q.get('answer_md') or '').strip()}"
+        if (q.get("analysis_md") or "").strip():
+            body += f"\n\n【分析】{(q.get('analysis_md') or '').strip()}"
+        if (q.get("solution_md") or "").strip():
+            body += f"\n\n【详解】{(q.get('solution_md') or '').strip()}"
+        kps = q.get("knowledge_points") or []
+        if kps:
+            bits = []
+            for item in kps:
+                code = (item.get("code") or "").strip()
+                desc = (item.get("description") or "").strip()
+                if code and desc:
+                    bits.append(f"{code} {desc}")
+                elif code:
+                    bits.append(code)
+            if bits:
+                body += f"\n\n【知识点】{'；'.join(bits)}"
+        no = q.get("question_no") or q.get("sort_order") or len(parts) + 1
+        parts.append(f"{no}. {body}".strip())
+    return "\n\n".join(parts).strip() + ("\n" if parts else "")
+
+
+def list_knowledge_points(limit: int = 500) -> list[dict[str, Any]]:
+    client = _client()
+    res = (
+        client.table("knowledge_points")
+        .select("code,description,semester,major_category,minor_category,sort_order,updated_at")
+        .order("sort_order")
+        .order("code")
+        .limit(limit)
+        .execute()
+    )
+    return list(res.data or [])
+
+
+def set_question_knowledge_points(
+    question_id: str,
+    items: list[ParsedKnowledge] | list[dict[str, Any]] | list[str],
+) -> list[dict[str, str]]:
+    codes: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if isinstance(item, str):
+            code = item.strip()
+        elif isinstance(item, ParsedKnowledge):
+            code = (item.code or "").strip()
+        else:
+            code = str(item.get("code") or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        codes.append(code)
+
+    client = _client()
+    found = (
+        client.table("questions")
+        .select("id")
+        .eq("id", question_id)
+        .limit(1)
+        .execute()
+    )
+    if not found.data:
+        raise ValueError("题目不存在")
+
+    meta_by_code: dict[str, dict[str, str]] = {}
+    if codes:
+        rows = (
+            client.table("knowledge_points")
+            .select("code,description,semester,major_category,minor_category")
+            .in_("code", codes)
+            .execute()
+        )
+        meta_by_code = {row["code"]: row for row in (rows.data or [])}
+    linked = [code for code in codes if code in meta_by_code]
+
+    client.table("question_knowledge_points").delete().eq("question_id", question_id).execute()
+    if linked:
+        client.table("question_knowledge_points").insert(
+            [
+                {
+                    "question_id": question_id,
+                    "knowledge_code": code,
+                    "sort_order": i,
+                }
+                for i, code in enumerate(linked)
+            ]
+        ).execute()
+    client.table("questions").update({"knowledge_codes": linked}).eq("id", question_id).execute()
+
+    return [
+        {
+            "code": code,
+            "description": meta_by_code[code].get("description") or "",
+            "semester": meta_by_code[code].get("semester") or "",
+            "major_category": meta_by_code[code].get("major_category") or "",
+            "minor_category": meta_by_code[code].get("minor_category") or "",
+        }
+        for code in linked
+    ]

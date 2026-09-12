@@ -28,8 +28,20 @@ from word_math_md.exam_bank import (
     exam_bank_configured,
     get_paper_questions,
     import_markdown_file,
+    list_knowledge_points,
     list_papers,
+    questions_to_markdown,
+    set_question_knowledge_points,
 )
+from word_math_md.knowledge_catalog import (
+    bulk_upsert_catalog,
+    create_catalog_item,
+    delete_catalog_item,
+    list_catalog,
+    seed_gaokao_catalog,
+    update_catalog_item,
+)
+from word_math_md.knowledge_page import page_html as knowledge_page_html
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -289,6 +301,7 @@ def index() -> str:
     }}
     .row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
     .btn-row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }}
+    #bankForm .btn-row {{ grid-template-columns: 1fr 1fr 1fr; }}
     pre.latex {{
       white-space: pre-wrap; background: #0d1218; border-radius: 8px;
       padding: 10px 12px; margin: 8px 0 14px; color: #d6e4f0;
@@ -322,13 +335,50 @@ def index() -> str:
     .tag.warn {{ background: #3a2a12; color: #f0c674; }}
     h2.sec {{ font-size: 1.05rem; margin: 18px 0 8px; color: var(--ink); }}
     .summary {{ color: #e8eef5; line-height: 1.6; margin-bottom: 8px; }}
-    a.dl {{ color: var(--accent); }}
+    a.dl, p.lead a {{ color: var(--accent); }}
     footer {{ margin-top: 28px; color: var(--muted); font-size: 0.8rem; }}
     #questions {{ margin-top: 22px; }}
     .q-card {{
       background: #12181f; border: 1px solid var(--line); border-radius: 12px;
       padding: 16px; margin-bottom: 14px;
     }}
+    .paper-card {{ cursor: pointer; }}
+    .paper-card:hover {{ border-color: var(--accent); }}
+    button.linkish {{
+      width: auto; display: inline-block; padding: 8px 14px; margin-bottom: 10px;
+      font-size: 0.85rem;
+    }}
+    .kp-row {{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }}
+    .kp-row button.linkish {{ margin-bottom: 0; }}
+    #kpDialog {{
+      position: fixed; inset: 0; z-index: 30;
+      display: flex; align-items: center; justify-content: center;
+    }}
+    #kpDialog[hidden] {{ display: none; }}
+    .kp-backdrop {{ position: absolute; inset: 0; background: rgba(0,0,0,0.55); }}
+    .kp-panel {{
+      position: relative; width: min(720px, 94vw); max-height: 86vh;
+      display: flex; flex-direction: column;
+      background: #1a222c; border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 14px;
+    }}
+    .kp-panel h3 {{ margin: 0 0 10px; font-size: 1.05rem; }}
+    .kp-toolbar {{ display: grid; grid-template-columns: 1fr 220px; gap: 8px; margin: 8px 0 10px; }}
+    @media (max-width: 700px) {{ .kp-toolbar {{ grid-template-columns: 1fr; }} }}
+    .kp-list {{ margin: 0 0 14px; overflow: auto; max-height: 52vh; padding-right: 4px; }}
+    .kp-group {{
+      color: var(--accent); font-size: 0.82rem; font-weight: 600;
+      margin: 12px 0 4px; padding-top: 4px;
+    }}
+    .kp-item {{
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 8px 0; border-bottom: 1px solid var(--line);
+    }}
+    .kp-item input {{ width: auto; margin-top: 3px; }}
+    .kp-item label {{ margin: 0; color: var(--ink); cursor: pointer; }}
+    .kp-item .muted {{ color: var(--muted); font-size: 0.82rem; }}
+    .kp-actions {{ display: flex; gap: 8px; justify-content: flex-end; align-items: center; }}
+    .kp-actions a {{ color: var(--accent); margin-right: auto; font-size: 0.85rem; }}
+    .kp-actions button {{ width: auto; padding: 8px 16px; font-size: 0.9rem; }}
     .q-meta {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
     .chip {{
       display: inline-block; padding: 2px 8px; border-radius: 999px;
@@ -361,7 +411,7 @@ def index() -> str:
   <main>
     <div class="brand">word-math-md</div>
     <h1>MathDoc Converter</h1>
-    <p class="lead">「word转换md文件」与高考数学助理「选择 Word 并转换为 Markdown」同一套流水线：OMML→LaTeX、mammoth、选项公式修复；图片以 data URL 嵌入并下载 .md。服务端口 {PORT}。</p>
+    <p class="lead">「word转换md文件」与高考数学助理「选择 Word 并转换为 Markdown」同一套流水线：OMML→LaTeX、mammoth、选项公式修复；图片以 data URL 嵌入并下载 .md。服务端口 {PORT}。独立模块：<a href="/knowledge">维护知识点</a>。</p>
     <form id="f">
       <label>Word 文件 (.docx)</label>
       <input type="file" name="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
@@ -382,14 +432,35 @@ def index() -> str:
       <div class="btn-row">
         <button type="button" class="secondary" id="btnImportMd">导入 Markdown 到题库</button>
         <button type="button" class="secondary" id="btnListPapers">查看已入库试卷</button>
+        <button type="button" class="secondary" id="btnKpAdmin">维护知识点</button>
       </div>
     </form>
     <input type="file" id="mdFile" accept=".md,.markdown,.mdown,text/markdown,text/plain" hidden />
     <input type="file" id="importMdFile" accept=".md,.markdown,.mdown,text/markdown,text/plain" hidden />
+    <p id="bankStatus" class="lead"></p>
     <div id="result">选择 .docx 后可转换或分析。点「上传markdown并显示题目」可预览；「导入 Markdown 到题库」会按题号写入 Supabase。</div>
     <div id="analysis" hidden></div>
     <div id="questions" hidden></div>
-    <footer>API: POST /api/convert · POST /api/parse-markdown · POST /api/exam-bank/import-markdown · GET /api/exam-bank/papers · v{__version__}</footer>
+    <div id="kpDialog" hidden>
+      <div class="kp-backdrop" id="kpBackdrop"></div>
+      <div class="kp-panel" role="dialog" aria-labelledby="kpTitle">
+        <h3 id="kpTitle">相关知识点</h3>
+        <p class="summary" id="kpHint">从课标知识点中多选，可按学期或关键词筛选。</p>
+        <div class="kp-toolbar">
+          <input type="text" id="kpFilter" placeholder="搜索编号、大类或小类" />
+          <select id="kpSemester">
+            <option value="">全部学期</option>
+          </select>
+        </div>
+        <div class="kp-list" id="kpList"></div>
+        <div class="kp-actions">
+          <a href="/knowledge" target="_blank" rel="noopener">维护知识点</a>
+          <button type="button" class="secondary" id="kpCancel">取消</button>
+          <button type="button" id="kpSave">保存</button>
+        </div>
+      </div>
+    </div>
+    <footer>API: POST /api/convert · POST /api/parse-markdown · POST /api/exam-bank/import-markdown · GET /api/exam-bank/papers · GET /api/exam-bank/knowledge-points · v{__version__}</footer>
   </main>
   <script>
     const f = document.getElementById('f');
@@ -402,6 +473,8 @@ def index() -> str:
     const btnParseMd = document.getElementById('btnParseMd');
     const btnImportMd = document.getElementById('btnImportMd');
     const btnListPapers = document.getElementById('btnListPapers');
+    const btnKpAdmin = document.getElementById('btnKpAdmin');
+    if (btnKpAdmin) btnKpAdmin.addEventListener('click', () => {{ location.href = '/knowledge'; }});
     const oleFile = document.getElementById('oleFile');
     const mdFile = document.getElementById('mdFile');
     const importMdFile = document.getElementById('importMdFile');
@@ -416,6 +489,20 @@ def index() -> str:
         throw new Error('接口未返回 JSON，请确认打开的是 http://127.0.0.1:3010 （word-math-md）。' + raw.slice(0, 120));
       }}
     }}
+    (async () => {{
+      const el = document.getElementById('bankStatus');
+      try {{
+        const res = await fetch('/api/exam-bank/status');
+        const data = await readJson(res);
+        if (data.configured) {{
+          el.textContent = '题库已连接 Supabase，可直接导入 Markdown。';
+        }} else {{
+          el.textContent = '题库未连接：请确认项目根目录 .env 已填写 SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY，然后重启 3010。';
+        }}
+      }} catch (err) {{
+        el.textContent = '无法检查题库状态。';
+      }}
+    }})();
     function table(headers, rows, rowFn) {{
       return '<table class="report"><thead><tr>' +
         headers.map(h => '<th>' + esc(h) + '</th>').join('') +
@@ -598,7 +685,16 @@ def index() -> str:
         await runOleConvert(oleFile.files[0]);
       }}
     }});
+    let lastPreviewData = null;
+    function kpChips(items) {{
+      return (items || []).map(kp => {{
+        const label = kp.minor_category || kp.major_category || kp.description || '';
+        return '<span class="chip">' + esc(kp.code) +
+          (label ? ' ' + esc(label) : '') + '</span>';
+      }}).join('');
+    }}
     function renderQuestions(data) {{
+      lastPreviewData = data;
       const qs = data.questions || [];
       const notices = data.notices || [];
       let html = notices.map(n => '<p class="summary">' + esc(n.text) + '</p>').join('');
@@ -624,6 +720,13 @@ def index() -> str:
         if (q.detailHtml) {{
           card += '<div class="q-block"><h4>【详解】</h4><div class="rich-content">' + q.detailHtml + '</div></div>';
         }}
+        if (q.question_id) {{
+          card += '<div class="q-block kp-row">';
+          card += '<button type="button" class="secondary linkish" data-kp-btn data-question-id="' +
+            esc(q.question_id) + '">相关知识点</button>';
+          card += '<span data-kp-list="' + esc(q.question_id) + '">' + kpChips(q.knowledge_points) + '</span>';
+          card += '</div>';
+        }}
         card += '</article>';
         return card;
       }}).join('');
@@ -632,6 +735,8 @@ def index() -> str:
     }}
     async function runParseMarkdown(file) {{
       btnParseMd.disabled = true;
+      analysis.innerHTML = '';
+      analysis.hidden = true;
       questions.hidden = false;
       questions.innerHTML = '';
       result.textContent = '正在解析 Markdown 并渲染题目…';
@@ -685,6 +790,9 @@ def index() -> str:
             '<span class="chip">' + esc(q.type_code) + '</span>' +
             (q.score != null ? '<span class="chip">' + esc(q.score) + ' 分</span>' : '') +
             '<span class="chip">选项 ' + esc(q.option_count) + '</span>' +
+            ((q.knowledge_codes || []).map(code =>
+              '<span class="chip">' + esc(code) + '</span>'
+            ).join('')) +
             '</div></article>';
         }}).join('');
         questions.innerHTML = html || '';
@@ -713,9 +821,12 @@ def index() -> str:
         const rows = data.papers || [];
         result.textContent = '题库中共 ' + rows.length + ' 套试卷。';
         questions.innerHTML = rows.map(p =>
-          '<article class="q-card"><div class="q-meta">' +
+          '<article class="q-card paper-card" data-paper-id="' + esc(p.id) +
+          '" role="button" tabindex="0">' +
+          '<div class="q-meta">' +
           '<span class="chip">' + esc(p.paper_code) + '</span>' +
-          '<span class="chip">题目 ' + esc(p.question_count) + '</span></div>' +
+          '<span class="chip">题目 ' + esc(p.question_count) + '</span>' +
+          '<span class="chip">点击查看</span></div>' +
           '<div class="rich-content">' + esc(p.title) + '</div></article>'
         ).join('') || '<p>题库还是空的。</p>';
         questions.hidden = false;
@@ -723,6 +834,172 @@ def index() -> str:
         result.textContent = '读取题库失败: ' + err.message;
       }} finally {{
         btnListPapers.disabled = false;
+      }}
+    }});
+    async function openBankPaper(paperId) {{
+      btnListPapers.disabled = true;
+      analysis.innerHTML = '';
+      analysis.hidden = true;
+      result.textContent = '正在读取试卷并渲染题目…';
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(paperId) + '/preview');
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const paper = data.paper || {{}};
+        result.innerHTML =
+          '<button type="button" class="secondary linkish" id="btnBackPapers">返回试卷列表</button>\\n' +
+          esc(paper.title || paper.paper_code || '试卷') +
+          ' · 编号 ' + esc(paper.paper_code || '') +
+          ' · 识别到 ' + (data.questions || []).length + ' 题。';
+        document.getElementById('btnBackPapers').addEventListener('click', () => btnListPapers.click());
+        renderQuestions(data);
+      }} catch (err) {{
+        result.textContent = '读取试卷失败: ' + err.message;
+        questions.innerHTML = '';
+      }} finally {{
+        btnListPapers.disabled = false;
+      }}
+    }}
+    questions.addEventListener('click', (ev) => {{
+      const kpBtn = ev.target.closest('[data-kp-btn]');
+      if (kpBtn && questions.contains(kpBtn)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        openKpDialog(kpBtn.getAttribute('data-question-id'));
+        return;
+      }}
+      const card = ev.target.closest('[data-paper-id]');
+      if (!card || !questions.contains(card)) return;
+      openBankPaper(card.getAttribute('data-paper-id'));
+    }});
+    questions.addEventListener('keydown', (ev) => {{
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      const card = ev.target.closest('[data-paper-id]');
+      if (!card || !questions.contains(card)) return;
+      ev.preventDefault();
+      openBankPaper(card.getAttribute('data-paper-id'));
+    }});
+    const kpDialog = document.getElementById('kpDialog');
+    const kpList = document.getElementById('kpList');
+    const kpFilter = document.getElementById('kpFilter');
+    const kpSemester = document.getElementById('kpSemester');
+    let kpQuestionId = '';
+    let kpCatalog = [];
+    let kpSelected = new Set();
+    function updateKpHint() {{
+      document.getElementById('kpHint').textContent =
+        '已选 ' + kpSelected.size + ' 个。从课标知识点中勾选，可多选。';
+    }}
+    function fillSemesterOptions() {{
+      const current = kpSemester.value;
+      const sems = [...new Set(kpCatalog.map(item => item.semester).filter(Boolean))];
+      kpSemester.innerHTML = '<option value="">全部学期</option>' +
+        sems.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+      if ([...kpSemester.options].some(opt => opt.value === current)) kpSemester.value = current;
+    }}
+    function visibleCatalog() {{
+      const q = (kpFilter.value || '').trim().toLowerCase();
+      const sem = kpSemester.value;
+      return kpCatalog.filter(item => {{
+        if (sem && item.semester !== sem) return false;
+        if (!q) return true;
+        const blob = [item.code, item.semester, item.major_category, item.minor_category, item.description]
+          .join(' ').toLowerCase();
+        return blob.includes(q);
+      }});
+    }}
+    function renderKpList() {{
+      updateKpHint();
+      if (!kpCatalog.length) {{
+        kpList.innerHTML = '<p class="summary">知识点字典为空，请先到 <a href="/knowledge">维护页</a> 导入课标。</p>';
+        return;
+      }}
+      const shown = visibleCatalog();
+      if (!shown.length) {{
+        kpList.innerHTML = '<p class="summary">没有匹配的知识点。</p>';
+        return;
+      }}
+      let html = '';
+      let lastSem = null;
+      shown.forEach(item => {{
+        if (item.semester !== lastSem) {{
+          lastSem = item.semester;
+          html += '<div class="kp-group">' + esc(item.semester || '未分学期') + '</div>';
+        }}
+        const id = 'kp-' + esc(item.code);
+        html += '<div class="kp-item"><input type="checkbox" id="' + id + '" value="' +
+          esc(item.code) + '"' + (kpSelected.has(item.code) ? ' checked' : '') +
+          ' /><label for="' + id + '"><strong>' + esc(item.code) + '</strong>' +
+          '<div class="muted">' +
+          esc([item.major_category, item.minor_category || item.description].filter(Boolean).join(' · ')) +
+          '</div></label></div>';
+      }});
+      kpList.innerHTML = html;
+    }}
+    function closeKpDialog() {{
+      kpDialog.hidden = true;
+      kpQuestionId = '';
+    }}
+    async function openKpDialog(questionId) {{
+      kpQuestionId = questionId;
+      kpDialog.hidden = false;
+      kpFilter.value = '';
+      kpSemester.value = '';
+      kpList.innerHTML = '<p class="summary">正在从 knowledge_points 加载…</p>';
+      const current = ((lastPreviewData && lastPreviewData.questions) || [])
+        .find(q => q.question_id === questionId);
+      kpSelected = new Set((current && current.knowledge_points || []).map(k => k.code));
+      try {{
+        const res = await fetch('/api/exam-bank/knowledge-points');
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        kpCatalog = data.knowledge_points || [];
+        fillSemesterOptions();
+        renderKpList();
+      }} catch (err) {{
+        kpList.innerHTML = '<p class="summary">加载失败: ' + esc(err.message) + '</p>';
+      }}
+    }}
+    document.getElementById('kpBackdrop').addEventListener('click', closeKpDialog);
+    document.getElementById('kpCancel').addEventListener('click', closeKpDialog);
+    kpFilter.addEventListener('input', renderKpList);
+    kpSemester.addEventListener('change', renderKpList);
+    kpList.addEventListener('change', (ev) => {{
+      const el = ev.target;
+      if (!el || el.type !== 'checkbox') return;
+      if (el.checked) kpSelected.add(el.value);
+      else kpSelected.delete(el.value);
+      updateKpHint();
+    }});
+    document.getElementById('kpSave').addEventListener('click', async () => {{
+      if (!kpQuestionId) return;
+      const codes = [...kpSelected];
+      const btn = document.getElementById('kpSave');
+      btn.disabled = true;
+      try {{
+        const res = await fetch('/api/exam-bank/questions/' + encodeURIComponent(kpQuestionId) + '/knowledge-points', {{
+          method: 'PUT',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ codes }}),
+        }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const saved = data.knowledge_points || [];
+        if (lastPreviewData && lastPreviewData.questions) {{
+          lastPreviewData.questions.forEach(q => {{
+            if (q.question_id === kpQuestionId) {{
+              q.knowledge_points = saved;
+              q.knowledge_codes = saved.map(k => k.code);
+            }}
+          }});
+        }}
+        const holder = document.querySelector('[data-kp-list="' + kpQuestionId + '"]');
+        if (holder) holder.innerHTML = kpChips(saved);
+        closeKpDialog();
+      }} catch (err) {{
+        document.getElementById('kpHint').textContent = '保存失败: ' + err.message;
+      }} finally {{
+        btn.disabled = false;
       }}
     }});
   </script>
@@ -1000,6 +1277,122 @@ def api_list_papers() -> JSONResponse:
     return JSONResponse({"ok": True, "papers": papers})
 
 
+@app.get("/knowledge", response_class=HTMLResponse)
+def knowledge_admin_page() -> str:
+    return knowledge_page_html()
+
+
+@app.get("/api/exam-bank/knowledge-points")
+def api_list_knowledge_points(with_usage: bool = False) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        points = list_catalog() if with_usage else list_knowledge_points(limit=2000)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "knowledge_points": points})
+
+
+class KnowledgeCatalogIn(BaseModel):
+    code: str
+    description: str = ""
+    semester: str = ""
+    major_category: str = ""
+    minor_category: str = ""
+    sort_order: int = 0
+
+
+class KnowledgeCatalogPatchIn(BaseModel):
+    description: str = ""
+    semester: str | None = None
+    major_category: str | None = None
+    minor_category: str | None = None
+    sort_order: int | None = None
+
+
+class KnowledgeBulkIn(BaseModel):
+    text: str
+
+
+@app.post("/api/exam-bank/knowledge-points")
+def api_create_knowledge_point(body: KnowledgeCatalogIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        item = create_catalog_item(
+            body.code,
+            body.description,
+            body.sort_order,
+            semester=body.semester,
+            major_category=body.major_category,
+            minor_category=body.minor_category,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "knowledge_point": item})
+
+
+@app.post("/api/exam-bank/knowledge-points/bulk")
+def api_bulk_knowledge_points(body: KnowledgeBulkIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        result = bulk_upsert_catalog(body.text)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    result["ok"] = True
+    return JSONResponse(result)
+
+
+@app.post("/api/exam-bank/knowledge-points/seed-gaokao")
+def api_seed_gaokao_knowledge() -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        result = seed_gaokao_catalog()
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    result["ok"] = True
+    return JSONResponse(result)
+
+
+@app.put("/api/exam-bank/knowledge-points/{code}")
+def api_update_knowledge_point(code: str, body: KnowledgeCatalogPatchIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        item = update_catalog_item(
+            code,
+            body.description,
+            body.sort_order,
+            semester=body.semester,
+            major_category=body.major_category,
+            minor_category=body.minor_category,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "knowledge_point": item})
+
+
+@app.delete("/api/exam-bank/knowledge-points/{code}")
+def api_delete_knowledge_point(code: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        delete_catalog_item(code)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/exam-bank/papers/{paper_id}")
 def api_paper_detail(paper_id: str) -> JSONResponse:
     if not exam_bank_configured():
@@ -1010,6 +1403,84 @@ def api_paper_detail(paper_id: str) -> JSONResponse:
         raise HTTPException(500, str(exc)) from exc
     data["ok"] = True
     return JSONResponse(data)
+
+
+@app.get("/api/exam-bank/papers/{paper_id}/preview")
+def api_paper_preview(paper_id: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise HTTPException(400, "无效的试卷 id")
+    try:
+        raw = get_paper_questions(paper_id)
+        paper = raw.get("paper") or {}
+        source = (paper.get("source_md") or "").strip()
+        if not source:
+            source = questions_to_markdown(raw.get("questions") or [])
+        if not source.strip():
+            raise HTTPException(404, "该试卷没有可显示的内容。")
+        dest = WORK / "preview-bank" / paper_id
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        dest.mkdir(parents=True, exist_ok=True)
+        src = dest / "paper.md"
+        src.write_text(source, encoding="utf-8")
+        data = parse_markdown_like_gaokao(src)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    data["ok"] = True
+    data["paper"] = {
+        "id": paper.get("id"),
+        "paper_code": paper.get("paper_code"),
+        "title": paper.get("title"),
+        "source_filename": paper.get("source_filename"),
+    }
+    data["file_name"] = paper.get("source_filename") or paper.get("title")
+    by_no = {}
+    for row in raw.get("questions") or []:
+        try:
+            by_no[int(row.get("question_no"))] = row
+        except (TypeError, ValueError):
+            continue
+    for item in data.get("questions") or []:
+        try:
+            dbq = by_no.get(int(item.get("index")))
+        except (TypeError, ValueError):
+            dbq = None
+        if not dbq:
+            continue
+        item["question_id"] = dbq.get("id")
+        item["knowledge_points"] = dbq.get("knowledge_points") or []
+        item["knowledge_codes"] = dbq.get("knowledge_codes") or []
+    return JSONResponse(data)
+
+
+class KnowledgeItemIn(BaseModel):
+    code: str
+    description: str = ""
+
+
+class SetQuestionKnowledgeIn(BaseModel):
+    codes: list[str] | None = None
+    items: list[KnowledgeItemIn] = []
+
+
+@app.put("/api/exam-bank/questions/{question_id}/knowledge-points")
+def api_set_question_knowledge(question_id: str, body: SetQuestionKnowledgeIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", question_id or ""):
+        raise HTTPException(400, "无效的题目 id")
+    try:
+        payload = body.codes if body.codes is not None else [item.model_dump() for item in body.items]
+        saved = set_question_knowledge_points(question_id, payload)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "knowledge_points": saved})
 
 
 if KATEX_DIR.is_dir():

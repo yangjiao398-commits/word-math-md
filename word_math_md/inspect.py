@@ -32,7 +32,9 @@ def _qn(ns: str, local: str) -> str:
     return f"{{{ns}}}{local}"
 
 
-def _local(tag: str) -> str:
+def _local(tag) -> str:
+    if not isinstance(tag, str):
+        return ""
     return tag.rsplit("}", 1)[-1] if "}" in tag else tag
 
 

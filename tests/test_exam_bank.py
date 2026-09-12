@@ -1,4 +1,13 @@
-from word_math_md.exam_bank import extract_options, guess_type, parse_markdown_paper
+import re
+
+from word_math_md.exam_bank import (
+    _storage_prefix,
+    extract_options,
+    guess_type,
+    parse_knowledge_points,
+    parse_markdown_paper,
+    questions_to_markdown,
+)
 
 
 SAMPLE = """# 测试卷
@@ -11,6 +20,7 @@ D. $4$
 【答案】A
 【分析】比较大小即可。
 【详解】选 A。
+【知识点】1.1 集合的含义；1.2 集合间的基本关系
 
 2. 下列正确的是（多选）
 A. 甲
@@ -40,6 +50,15 @@ def test_parse_questions_in_order():
     assert paper.questions[3].type_code == "solution"
     assert "比较大小" in paper.questions[0].analysis_md
     assert "选 A" in paper.questions[0].solution_md
+    assert [kp.code for kp in paper.questions[0].knowledge_points] == ["1.1", "1.2"]
+    assert paper.questions[0].knowledge_points[0].description == "集合的含义"
+    assert paper.questions[1].knowledge_points == []
+
+
+def test_parse_knowledge_points_codes_only():
+    items = parse_knowledge_points("2.1、2.3，3.1")
+    assert [kp.code for kp in items] == ["2.1", "2.3", "3.1"]
+    assert all(kp.description == "" for kp in items)
 
 
 def test_extract_options_keeps_stem():
@@ -51,3 +70,41 @@ def test_extract_options_keeps_stem():
 def test_guess_type_multi():
     _, options = extract_options("题\nA. 1\nB. 2\nC. 3\nD. 4\n")
     assert guess_type("题", "BD", options) == "multi_choice"
+
+
+def test_storage_prefix_is_ascii():
+    key = _storage_prefix("精品解析-广东省深圳联盟校2023-2024学年高一上学期期中数学试题-解析版-ole-latex-preprocessed")
+    assert key.isascii()
+    assert "/" not in key
+    assert re.fullmatch(r"[A-Za-z0-9._-]+", key)
+    assert key == _storage_prefix("精品解析-广东省深圳联盟校2023-2024学年高一上学期期中数学试题-解析版-ole-latex-preprocessed")
+
+
+def test_guess_type_fill_blank_escaped_underscores():
+    stem = r"则 $f(2)=$\_\_\_\_\_\_\_\_\_\_\_."
+    assert guess_type(stem, r"$\frac{3}{2}$", []) == "fill_blank"
+
+
+def test_questions_to_markdown_roundtrip_markers():
+    md = questions_to_markdown(
+        [
+            {
+                "question_no": 1,
+                "stem_md": "已知 $a>0$",
+                "options": [
+                    {"label": "A", "content_md": "$1$"},
+                    {"label": "B", "content_md": "$2$"},
+                ],
+                "answer_md": "A",
+                "analysis_md": "比较即可",
+                "solution_md": "选 A",
+                "knowledge_points": [{"code": "1.1", "description": "集合"}],
+            }
+        ]
+    )
+    assert md.startswith("1. 已知")
+    assert "A. $1$" in md
+    assert "【答案】A" in md
+    assert "【分析】比较即可" in md
+    assert "【详解】选 A" in md
+    assert "【知识点】1.1 集合" in md
