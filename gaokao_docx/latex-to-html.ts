@@ -80,6 +80,8 @@ export function fixBrokenLatex(tex: string): string {
 
   // \left 后直接跟非定界字符时补 \{
   s = s.replace(/\\left(?!\s*[\\()\[\]|.])/g, "\\left\\{");
+  // Word：\left \begin{array} —— \begin 以 \ 开头，上一行不会补定界符
+  s = s.replace(/\\left(?=\s*\\begin\{(?:array|cases)\})/g, "\\left\\{");
 
   // 集合写法 {a,b} 在 \left \right 外可保持；若出现 \frac 等已是命令则不动
 
@@ -108,6 +110,9 @@ export function normalizeTex(raw: string): string {
   s = fixBrokenLatex(s);
   s = s
     .replace(/＄/g, "$")
+    .replace(/＝|═/g, "=")
+    .replace(/＋/g, "+")
+    .replace(/－/g, "-")
     .replace(/（/g, "(")
     .replace(/）/g, ")");
   // Word/TexVC 常见：\rm{\pi } → \mathrm{\pi }
@@ -181,6 +186,9 @@ export function normalizeWordMathArtifacts(input: string): string {
     "\\log_{$1}",
   );
   s = s.replace(/\{\s*\\rm\{\s*\\pi\s*\}\s*\}/gi, "\\pi");
+  // Word 集合竖线：{ \rm{ \| } } / \mathrm{\|} → \mid
+  s = s.replace(/\{\s*\\(?:rm|mathrm)\{\s*\\?\|+\s*\}\s*\}/g, "\\mid ");
+  s = s.replace(/\\(?:rm|mathrm)\{\s*\\?\|+\s*\}/g, "\\mid ");
   s = s.replace(/\\sqrt\s*\[\s*\]\s*\{/g, "\\sqrt{");
   // 去掉只包一层的多余 array
   s = s.replace(
@@ -295,6 +303,17 @@ function repairSetBuilderNotation(input: string): string {
       return `\\left\\{${normalizeSetBuilderBody(body)}\\right\\}`;
     },
   );
+  // Word：\end{array} \right.\| x^2+y^2\le 2}  后半段被拆到 array 外
+  s = s.replace(
+    /\\left\s*\\?\{\s*\\begin\{array\}\{[lcr]*\}([\s\S]*?)\\end\{array\}\s*\\right\s*\.\s*(?:\\\||\|)([\s\S]*?)(?:\\right\s*\\?\}|\})?\s*$/g,
+    (_m, body: string, rest: string) => {
+      const extra = rest.replace(/\s+/g, " ").trim().replace(/\}$/, "");
+      const mid = normalizeSetBuilderBody(body);
+      return extra
+        ? `\\left\\{${mid} , ${extra}\\right\\}`
+        : `\\left\\{${mid}\\right\\}`;
+    },
+  );
   return s;
 }
 
@@ -330,7 +349,7 @@ function foldPiecewiseArrayToCases(input: string): string {
 
 function looksLikeLatexBody(tex: string): boolean {
   if (
-    /\\(?:begin|end|left|right|frac|dfrac|sqrt|mathrm|mathbf|rm|array|cases|log)/.test(
+    /\\(?:begin|end|left|right|frac|dfrac|sqrt|mathrm|mathbf|rm|array|cases|log|therefore|because|Rightarrow|implies|forall|exists)/.test(
       tex,
     )
   ) {
@@ -445,13 +464,17 @@ export function repairInFollowedByDisplayDollars(input: string): string {
 /** $a$$b$ → $a$ $b$，避免相邻行内公式粘成 $$ 被当成 display。 */
 export function splitAdjacentInlineDollars(input: string): string {
   if (!input || !input.includes("$$")) return input;
-  return input.replace(
-    /\$([^$\n]+?)\$\$([^$\n]+?)\$/g,
-    (full, a: string, b: string) => {
-      if (looksLikeLatexBody(a) && looksLikeLatexBody(b)) return `$${a}$ $${b}$`;
-      return full;
-    },
-  );
+  let s = input;
+  // $\therefore $$0<a<1$ 这类两侧都可能只有一条命令，不能要求「像完整公式」
+  for (let i = 0; i < 4 && s.includes("$$"); i++) {
+    const next = s.replace(
+      /\$([^$\n]+?)\$\$([^$\n]+?)\$/g,
+      (_m, a: string, b: string) => `$${a}$ $${b}$`,
+    );
+    if (next === s) break;
+    s = next;
+  }
+  return s;
 }
 
 function stripRecoverArtifacts(input: string): string {
@@ -479,7 +502,16 @@ export function recoverDanglingDollarLatex(input: string): string {
 
   // 先保护完整 $$...$$ / $...$，避免把 $\frac{1}{a}+\frac{9}{b}$ 从第二个 \frac 切开
   s = splitAdjacentInlineDollars(s);
-  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (m) => park(m));
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (m, inner: string) => {
+    // 误把 $\therefore $$0<a$ … 下一题 $$ 当成一段 display，会吞掉中间整题
+    if (
+      /(?:^|\n)\s*(?:\d+\s*(?:\\[.．]|[.．、])|第\s*\d+\s*题)/.test(inner) ||
+      /【答案】|【解析】|【详解】|【分析】/.test(inner)
+    ) {
+      return m;
+    }
+    return park(m);
+  });
   s = replaceInlineDollarMath(s, (tex) => park(`$${tex}$`));
 
   s = s.replace(
@@ -494,11 +526,28 @@ export function recoverDanglingDollarLatex(input: string): string {
     },
   );
 
-  s = s.replace(RECOVER_SLOT, (_m, idx: string) => slots[Number(idx)] ?? "");
+  for (let i = 0; i < 16 && /%%RK\d+%%/.test(s); i++) {
+    s = s.replace(RECOVER_SLOT, (_m, idx: string) => slots[Number(idx)] ?? "");
+  }
   // 旧版 \0R0\0 泄漏，以及 )R0\left 这类残片
   s = s.replace(/\u0000R(\d+)\u0000/g, "");
   s = s.replace(/%%RK\d+%%/g, "");
   s = s.replace(/\)R\d+(?=\\left)/g, ")");
+  // `$…\left…}` 缺少收尾 $（Word 集合公式常见）
+  s = s.replace(
+    /\$([^$\n]*\\(?:left|begin|right)[^$\n]*)\}(\s*)(?=$|\n|【)/g,
+    (full, tex: string, ws: string) => {
+      if (!looksLikeLatexBody(tex)) return full;
+      return `$${tex}$${ws}`;
+    },
+  );
+  // `$…\left…` 行末仍未闭合（没有多余 }）
+  s = s.replace(/\$([^$\n]+)$/gm, (full, tex: string) => {
+    if (!looksLikeLatexBody(tex)) return full;
+    return `$${tex}$`;
+  });
+  // Word 集合收尾多写的 `$...$}`
+  s = s.replace(/(\$[^$\n]+\$)\}/g, "$1");
   return splitAdjacentInlineDollars(s);
 }
 

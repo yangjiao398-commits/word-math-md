@@ -500,18 +500,16 @@ function splitByQuestionNumber(
     return chain;
   };
 
-  // 优先 1,2,3…；否则取文档中最长的连续大题链（如 PDF 节选从 16. 起）
+  // 取最长连续大题链；并列时优先 1,2,3…（详解里「1.参变分离法」不能盖过 11.12.13.）
   let filtered = takeChain(1);
-  if (filtered.length === 0) {
-    let best: typeof hits = [];
+  {
     const seenStarts = new Set<number>();
     for (const hit of hits) {
       if (seenStarts.has(hit.index)) continue;
       seenStarts.add(hit.index);
       const chain = takeChain(hit.index);
-      if (chain.length > best.length) best = chain;
+      if (chain.length > filtered.length) filtered = chain;
     }
-    filtered = best;
   }
   if (filtered.length === 0) return [];
 

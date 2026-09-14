@@ -154,17 +154,14 @@ def split_by_question_number(text: str) -> list[tuple[int, str]]:
         return chain
 
     filtered = take_chain(1)
-    if not filtered:
-        best: list[tuple[int, int, int]] = []
-        seen: set[int] = set()
-        for hit in hits:
-            if hit[0] in seen:
-                continue
-            seen.add(hit[0])
-            chain = take_chain(hit[0])
-            if len(chain) > len(best):
-                best = chain
-        filtered = best
+    seen: set[int] = set()
+    for hit in hits:
+        if hit[0] in seen:
+            continue
+        seen.add(hit[0])
+        chain = take_chain(hit[0])
+        if len(chain) > len(filtered):
+            filtered = chain
     if not filtered:
         return []
 
