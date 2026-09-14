@@ -1,0 +1,173 @@
+#vsDialog {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#vsDialog[hidden] { display: none; }
+.vs-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+}
+.vs-panel {
+  position: relative;
+  width: min(980px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: #1a222c;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px 16px 12px;
+  overflow: hidden;
+}
+.vs-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.vs-head h3 {
+  margin: 0;
+  font-size: 1.08rem;
+  flex: 1;
+}
+.vs-head .muted { color: var(--muted); font-size: 0.82rem; margin: 4px 0 0; }
+.vs-close {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  background: #243140;
+  border: 1px solid var(--line);
+}
+.vs-layout {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+.vs-phases { list-style: none; margin: 0; padding: 6px 0 0; }
+.vs-phases li {
+  position: relative;
+  padding: 10px 10px 10px 18px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  border: 1px solid transparent;
+}
+.vs-phases li::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 14px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3a4a5c;
+}
+.vs-phases li.active {
+  color: var(--ink);
+  background: #243140;
+  border-color: var(--accent);
+}
+.vs-phases li.active::before { background: var(--accent); }
+.vs-phases li.done { color: #9ecbff; }
+.vs-phases li.done::before { background: #7dcea0; }
+.vs-stage {
+  background: #0f1419;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-height: 280px;
+  overflow: hidden;
+}
+.vs-stage svg { display: block; width: 100%; height: auto; }
+.vs-step {
+  margin-top: 12px;
+  background: #12181f;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  min-height: 88px;
+  max-height: 28vh;
+  overflow: auto;
+}
+.vs-step .vs-kicker {
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 650;
+  margin: 0 0 6px;
+}
+.vs-step .rich-content { font-size: 0.9rem; }
+.vs-stem-img { margin: 0 0 8px; }
+.vs-stem-img img {
+  max-height: 8rem;
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.vs-step.enter { animation: vsIn 0.45s ease; }
+@keyframes vsIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.vs-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+.vs-controls button {
+  width: auto;
+  padding: 8px 14px;
+  font-size: 0.88rem;
+}
+.vs-progress {
+  flex: 1;
+  min-width: 120px;
+  height: 6px;
+  border-radius: 999px;
+  background: #243140;
+  overflow: hidden;
+}
+.vs-progress > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+.vs-count { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.vs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.vs-row .muted { color: var(--muted); font-size: 0.82rem; }
+button.vs-open {
+  width: auto;
+  padding: 8px 16px;
+  margin: 0;
+  font-size: 0.88rem;
+}
+@media (max-width: 720px) {
+  .vs-layout { grid-template-columns: 1fr; }
+  .vs-phases {
+    display: flex;
+    gap: 6px;
+    padding: 0;
+    overflow-x: auto;
+  }
+  .vs-phases li { margin: 0; white-space: nowrap; }
+}
+@media print {
+  #vsDialog, .vs-row { display: none !important; }
+}

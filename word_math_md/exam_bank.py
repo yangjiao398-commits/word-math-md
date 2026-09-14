@@ -24,6 +24,15 @@ def _load_env() -> None:
         load_dotenv(ENV_PATH, override=True)
 
 BUCKET = "exam-assets"
+PAPER_SEMESTERS = (
+    "高一上学期",
+    "高一下学期",
+    "高二上学期",
+    "高二下学期",
+    "高三上学期",
+    "高三下学期",
+)
+PAPER_EXAM_TYPES = ("月考", "期中", "期末")
 SECTION_MARKERS = ("【答案】", "【解析】", "【分析】", "【详解】", "【知识点】")
 MARKER_TO_KEY = {
     "【答案】": "answer",
@@ -290,6 +299,24 @@ def parse_markdown_paper(
 def exam_bank_configured() -> bool:
     _load_env()
     return bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
+
+
+def normalize_paper_semester(value: str | None) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if text not in PAPER_SEMESTERS:
+        raise ValueError("学期必须是高一上学期、高一下学期、高二上学期、高二下学期、高三上学期或高三下学期。")
+    return text
+
+
+def normalize_paper_exam_type(value: str | None) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if text not in PAPER_EXAM_TYPES:
+        raise ValueError("考试类型必须是月考、期中或期末。")
+    return text
 
 
 def _client():
@@ -605,7 +632,7 @@ def list_papers(limit: int = 50) -> list[dict[str, Any]]:
     client = _client()
     res = (
         client.table("papers")
-        .select("id,paper_code,title,source_filename,created_at,updated_at")
+        .select("id,paper_code,title,source_filename,semester,exam_type,created_at,updated_at")
         .order("updated_at", desc=True)
         .limit(limit)
         .execute()
@@ -622,11 +649,45 @@ def list_papers(limit: int = 50) -> list[dict[str, Any]]:
     return rows
 
 
+def update_paper_meta(
+    paper_id: str,
+    *,
+    semester: str | None = None,
+    exam_type: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if semester is not None:
+        payload["semester"] = normalize_paper_semester(semester)
+    if exam_type is not None:
+        payload["exam_type"] = normalize_paper_exam_type(exam_type)
+    if len(payload) == 1:
+        raise ValueError("请选择学期或考试类型。")
+    client = _client()
+    found = (
+        client.table("papers")
+        .select("id")
+        .eq("id", paper_id)
+        .limit(1)
+        .execute()
+    )
+    if not found.data:
+        raise ValueError("试卷不存在")
+    client.table("papers").update(payload).eq("id", paper_id).execute()
+    row = (
+        client.table("papers")
+        .select("id,paper_code,title,semester,exam_type,updated_at")
+        .eq("id", paper_id)
+        .single()
+        .execute()
+    )
+    return row.data or {}
+
+
 def get_paper_questions(paper_id: str) -> dict[str, Any]:
     client = _client()
     paper = (
         client.table("papers")
-        .select("id,paper_code,title,source_filename,source_md,created_at,updated_at")
+        .select("id,paper_code,title,source_filename,source_md,semester,exam_type,created_at,updated_at")
         .eq("id", paper_id)
         .single()
         .execute()

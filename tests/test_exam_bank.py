@@ -1,9 +1,13 @@
 import re
 
 from word_math_md.exam_bank import (
+    PAPER_EXAM_TYPES,
+    PAPER_SEMESTERS,
     _storage_prefix,
     extract_options,
     guess_type,
+    normalize_paper_exam_type,
+    normalize_paper_semester,
     parse_knowledge_points,
     parse_markdown_paper,
     questions_to_markdown,
@@ -36,6 +40,25 @@ D. 丁
 4. 证明：三角形内角和为 $180^\\circ$。
 【详解】延长并作平行线。
 """
+
+
+def test_paper_meta_allowed_values():
+    assert normalize_paper_semester("高二下学期") == "高二下学期"
+    assert normalize_paper_semester("  ") == ""
+    assert normalize_paper_exam_type("期中") == "期中"
+    assert normalize_paper_exam_type("") == ""
+    try:
+        normalize_paper_semester("高四")
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+    try:
+        normalize_paper_exam_type("周测")
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+    assert len(PAPER_SEMESTERS) == 6
+    assert PAPER_EXAM_TYPES == ("月考", "期中", "期末")
 
 
 def test_parse_questions_in_order():
