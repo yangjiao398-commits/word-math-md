@@ -30,9 +30,11 @@ from word_math_md.exam_bank import (
     PAPER_SEMESTERS,
     exam_bank_configured,
     get_paper_questions,
+    get_questions_by_ids,
     import_markdown_file,
     list_knowledge_points,
     list_papers,
+    list_questions_by_knowledge,
     questions_to_markdown,
     set_question_knowledge_points,
     update_paper_meta,
@@ -46,6 +48,7 @@ from word_math_md.knowledge_catalog import (
     update_catalog_item,
 )
 from word_math_md.knowledge_page import page_html as knowledge_page_html
+from word_math_md.practice_page import page_html as practice_page_html
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -526,7 +529,7 @@ def index() -> str:
   <main>
     <div class="brand no-print">word-math-md</div>
     <h1 class="no-print">MathDoc Converter</h1>
-    <p class="lead no-print">「word转换md文件」与高考数学助理「选择 Word 并转换为 Markdown」同一套流水线：OMML→LaTeX、mammoth、选项公式修复；图片以 data URL 嵌入并下载 .md。服务端口 {PORT}。独立模块：<a href="/knowledge">维护知识点</a>。</p>
+    <p class="lead no-print">「word转换md文件」与高考数学助理「选择 Word 并转换为 Markdown」同一套流水线：OMML→LaTeX、mammoth、选项公式修复；图片以 data URL 嵌入并下载 .md。服务端口 {PORT}。独立模块：<a href="/knowledge">维护知识点</a> · <a href="/practice">知识点专项训练</a>。</p>
     <form id="f" class="no-print">
       <label>Word 文件 (.docx)</label>
       <input type="file" name="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
@@ -548,6 +551,7 @@ def index() -> str:
         <button type="button" class="secondary" id="btnImportMd">导入 Markdown 到题库</button>
         <button type="button" class="secondary" id="btnListPapers">查看已入库试卷</button>
         <button type="button" class="secondary" id="btnKpAdmin">维护知识点</button>
+        <button type="button" class="secondary" id="btnPractice">知识点专项训练</button>
       </div>
     </form>
     <input type="file" id="mdFile" accept=".md,.markdown,.mdown,text/markdown,text/plain" hidden />
@@ -617,6 +621,8 @@ def index() -> str:
     const btnListPapers = document.getElementById('btnListPapers');
     const btnKpAdmin = document.getElementById('btnKpAdmin');
     if (btnKpAdmin) btnKpAdmin.addEventListener('click', () => {{ location.href = '/knowledge'; }});
+    const btnPractice = document.getElementById('btnPractice');
+    if (btnPractice) btnPractice.addEventListener('click', () => {{ location.href = '/practice'; }});
     const oleFile = document.getElementById('oleFile');
     const mdFile = document.getElementById('mdFile');
     const importMdFile = document.getElementById('importMdFile');
@@ -1579,9 +1585,124 @@ def api_update_paper_meta(paper_id: str, body: PaperMetaIn) -> JSONResponse:
     return JSONResponse({"ok": True, "paper": paper})
 
 
+class QuestionsByKnowledgeIn(BaseModel):
+    codes: list[str] = []
+    match: str = "any"
+    type_code: str = ""
+
+
+class PracticePreviewIn(BaseModel):
+    question_ids: list[str] = []
+
+
+def _parse_questions_markdown(source: str, job: str) -> dict:
+    dest = WORK / "preview-bank" / job
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    src = dest / "paper.md"
+    src.write_text(source, encoding="utf-8")
+    return parse_markdown_like_gaokao(src)
+
+
+@app.post("/api/exam-bank/questions-by-knowledge")
+def api_questions_by_knowledge(body: QuestionsByKnowledgeIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        data = list_questions_by_knowledge(
+            body.codes,
+            match=body.match,
+            type_code=(body.type_code or "").strip(),
+        )
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    slim = []
+    for q in data.get("questions") or []:
+        slim.append(
+            {
+                "id": q.get("id"),
+                "paper_id": q.get("paper_id"),
+                "paper_code": q.get("paper_code"),
+                "paper_title": q.get("paper_title"),
+                "question_no": q.get("question_no"),
+                "type_code": q.get("type_code"),
+                "stem_text": (q.get("stem_text") or "")[:240],
+                "score": q.get("score"),
+                "knowledge_points": q.get("knowledge_points") or [],
+                "knowledge_codes": q.get("knowledge_codes") or [],
+                "matched_codes": q.get("matched_codes") or [],
+            }
+        )
+    return JSONResponse(
+        {
+            "ok": True,
+            "codes": data.get("codes") or [],
+            "match": data.get("match") or "any",
+            "questions": slim,
+        }
+    )
+
+
+@app.post("/api/exam-bank/practice/preview")
+def api_practice_preview(body: PracticePreviewIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        rows = get_questions_by_ids(body.question_ids)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    if not rows:
+        raise HTTPException(400, "没有可预览的题目，请先选择题目。")
+    numbered = []
+    for i, row in enumerate(rows, start=1):
+        item = dict(row)
+        item["question_no"] = i
+        numbered.append(item)
+    source = questions_to_markdown(numbered)
+    if not source.strip():
+        raise HTTPException(404, "所选题目没有可显示的内容。")
+    try:
+        data = _parse_questions_markdown(source, "practice")
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    parsed = data.get("questions") or []
+    for i, item in enumerate(parsed):
+        dbq = numbered[i] if i < len(numbered) else None
+        if not dbq:
+            continue
+        item["question_id"] = dbq.get("id")
+        item["type_code"] = dbq.get("type_code") or ""
+        item["knowledge_points"] = dbq.get("knowledge_points") or []
+        item["knowledge_codes"] = dbq.get("knowledge_codes") or []
+        item["paper_title"] = dbq.get("paper_title") or ""
+        item["paper_code"] = dbq.get("paper_code") or ""
+        item["source_question_no"] = dbq.get("source_question_no")
+    kps = []
+    seen_kp: set[str] = set()
+    for row in numbered:
+        for kp in row.get("knowledge_points") or []:
+            code = kp.get("code") or ""
+            if code and code not in seen_kp:
+                seen_kp.add(code)
+                kps.append(code)
+    title = "知识点专项训练"
+    if kps:
+        title = "知识点专项训练（" + "、".join(kps[:8]) + ("…" if len(kps) > 8 else "") + "）"
+    data["ok"] = True
+    data["title"] = title
+    data["questions"] = parsed
+    return JSONResponse(data)
+
+
 @app.get("/knowledge", response_class=HTMLResponse)
 def knowledge_admin_page() -> str:
     return knowledge_page_html()
+
+
+@app.get("/practice", response_class=HTMLResponse)
+def practice_page() -> str:
+    return practice_page_html()
 
 
 @app.get("/api/exam-bank/knowledge-points")

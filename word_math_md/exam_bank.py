@@ -802,6 +802,235 @@ def questions_to_markdown(questions: list[dict[str, Any]]) -> str:
     return "\n\n".join(parts).strip() + ("\n" if parts else "")
 
 
+def normalize_knowledge_codes(codes: list[str] | None, *, limit: int = 40) -> list[str]:
+    """Deduplicate and validate knowledge-point codes for queries."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in codes or []:
+        code = str(raw or "").strip()
+        if not code or code in seen or not KNOWLEDGE_CODE_RE.match(code):
+            continue
+        seen.add(code)
+        out.append(code)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _chunked(items: list[str], size: int = 80) -> list[list[str]]:
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+def _attach_options_and_knowledge(client, qrows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ids = [q["id"] for q in qrows]
+    options_by_q: dict[str, list] = {qid: [] for qid in ids}
+    links_by_q: dict[str, list] = {qid: [] for qid in ids}
+    if not ids:
+        return qrows
+    for chunk in _chunked(ids):
+        opts = (
+            client.table("question_options")
+            .select("question_id,label,content_md,sort_order")
+            .in_("question_id", chunk)
+            .order("sort_order")
+            .execute()
+        )
+        for opt in opts.data or []:
+            options_by_q.setdefault(opt["question_id"], []).append(opt)
+        links = (
+            client.table("question_knowledge_points")
+            .select("question_id,knowledge_code,sort_order")
+            .in_("question_id", chunk)
+            .order("sort_order")
+            .execute()
+        )
+        for row in links.data or []:
+            links_by_q.setdefault(row["question_id"], []).append(row)
+    all_codes = sorted(
+        {
+            row["knowledge_code"]
+            for rows in links_by_q.values()
+            for row in rows
+            if row.get("knowledge_code")
+        }
+    )
+    meta_by_code: dict[str, dict[str, str]] = {}
+    if all_codes:
+        kps = (
+            client.table("knowledge_points")
+            .select("code,description,semester,major_category,minor_category")
+            .in_("code", all_codes)
+            .execute()
+        )
+        meta_by_code = {
+            row["code"]: {
+                "description": row.get("description") or "",
+                "semester": row.get("semester") or "",
+                "major_category": row.get("major_category") or "",
+                "minor_category": row.get("minor_category") or "",
+            }
+            for row in (kps.data or [])
+        }
+    for q in qrows:
+        qid = q["id"]
+        q["options"] = options_by_q.get(qid, [])
+        points = []
+        for row in links_by_q.get(qid, []):
+            meta = meta_by_code.get(row["knowledge_code"], {})
+            points.append(
+                {
+                    "code": row["knowledge_code"],
+                    "description": meta.get("description", ""),
+                    "semester": meta.get("semester", ""),
+                    "major_category": meta.get("major_category", ""),
+                    "minor_category": meta.get("minor_category", ""),
+                    "sort_order": row.get("sort_order", 0),
+                }
+            )
+        q["knowledge_points"] = points
+        q["knowledge_codes"] = q.get("knowledge_codes") or [item["code"] for item in points]
+    return qrows
+
+
+def list_questions_by_knowledge(
+    codes: list[str],
+    *,
+    match: str = "any",
+    type_code: str = "",
+    limit: int = 300,
+) -> dict[str, Any]:
+    """Cross-paper questions tagged with the given knowledge-point codes."""
+    wanted = normalize_knowledge_codes(codes)
+    if not wanted:
+        return {"codes": [], "match": "any", "questions": []}
+    mode = "all" if str(match).strip().lower() == "all" else "any"
+    client = _client()
+    qids: list[str] = []
+    hits_by_q: dict[str, set[str]] = {}
+    for chunk in _chunked(wanted):
+        links = (
+            client.table("question_knowledge_points")
+            .select("question_id,knowledge_code")
+            .in_("knowledge_code", chunk)
+            .execute()
+        )
+        for row in links.data or []:
+            qid = row.get("question_id")
+            code = row.get("knowledge_code")
+            if not qid or not code:
+                continue
+            hits_by_q.setdefault(qid, set()).add(code)
+    wanted_set = set(wanted)
+    for qid, hit in hits_by_q.items():
+        if mode == "all":
+            if wanted_set <= hit:
+                qids.append(qid)
+        elif hit:
+            qids.append(qid)
+    if not qids:
+        return {"codes": wanted, "match": mode, "questions": []}
+
+    qrows: list[dict[str, Any]] = []
+    for chunk in _chunked(qids):
+        query = (
+            client.table("questions")
+            .select(
+                "id,paper_id,question_no,sort_order,type_code,stem_md,stem_text,score,"
+                "answer_md,analysis_md,solution_md,knowledge_codes"
+            )
+            .in_("id", chunk)
+        )
+        if type_code:
+            query = query.eq("type_code", type_code)
+        res = query.execute()
+        qrows.extend(res.data or [])
+    paper_ids = sorted({q["paper_id"] for q in qrows if q.get("paper_id")})
+    papers: dict[str, dict[str, Any]] = {}
+    for chunk in _chunked(paper_ids):
+        pres = (
+            client.table("papers")
+            .select("id,paper_code,title,semester,exam_type")
+            .in_("id", chunk)
+            .execute()
+        )
+        for row in pres.data or []:
+            papers[row["id"]] = row
+    qrows = _attach_options_and_knowledge(client, qrows)
+    out: list[dict[str, Any]] = []
+    for q in qrows:
+        paper = papers.get(q.get("paper_id") or "", {})
+        out.append(
+            {
+                **q,
+                "paper_title": paper.get("title") or "",
+                "paper_code": paper.get("paper_code") or "",
+                "paper_semester": paper.get("semester") or "",
+                "paper_exam_type": paper.get("exam_type") or "",
+                "matched_codes": sorted(hits_by_q.get(q["id"], set()) & wanted_set),
+            }
+        )
+    out.sort(
+        key=lambda q: (
+            q.get("matched_codes") or [],
+            q.get("paper_code") or "",
+            int(q.get("question_no") or 0),
+        )
+    )
+    return {"codes": wanted, "match": mode, "questions": out[: max(1, min(limit, 400))]}
+
+
+def get_questions_by_ids(question_ids: list[str], *, limit: int = 80) -> list[dict[str, Any]]:
+    """Load full question rows in the given id order (for practice preview/print)."""
+    ids: list[str] = []
+    seen: set[str] = set()
+    uuid_re = re.compile(r"^[0-9a-fA-F-]{36}$")
+    for raw in question_ids or []:
+        qid = str(raw or "").strip()
+        if not qid or qid in seen or not uuid_re.match(qid):
+            continue
+        seen.add(qid)
+        ids.append(qid)
+        if len(ids) >= limit:
+            break
+    if not ids:
+        return []
+    client = _client()
+    by_id: dict[str, dict[str, Any]] = {}
+    for chunk in _chunked(ids):
+        res = (
+            client.table("questions")
+            .select(
+                "id,paper_id,question_no,sort_order,type_code,stem_md,stem_text,score,"
+                "answer_md,analysis_md,solution_md,knowledge_codes"
+            )
+            .in_("id", chunk)
+            .execute()
+        )
+        for row in res.data or []:
+            by_id[row["id"]] = row
+    ordered = [by_id[qid] for qid in ids if qid in by_id]
+    paper_ids = sorted({q["paper_id"] for q in ordered if q.get("paper_id")})
+    papers: dict[str, dict[str, Any]] = {}
+    for chunk in _chunked(paper_ids):
+        pres = (
+            client.table("papers")
+            .select("id,paper_code,title,semester,exam_type")
+            .in_("id", chunk)
+            .execute()
+        )
+        for row in pres.data or []:
+            papers[row["id"]] = row
+    ordered = _attach_options_and_knowledge(client, ordered)
+    for q in ordered:
+        paper = papers.get(q.get("paper_id") or "", {})
+        q["paper_title"] = paper.get("title") or ""
+        q["paper_code"] = paper.get("paper_code") or ""
+        q["paper_semester"] = paper.get("semester") or ""
+        q["paper_exam_type"] = paper.get("exam_type") or ""
+        q["source_question_no"] = q.get("question_no")
+    return ordered
+
+
 def list_knowledge_points(limit: int = 500) -> list[dict[str, Any]]:
     client = _client()
     res = (

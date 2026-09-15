@@ -66,6 +66,7 @@ PAGE_HTML = r"""<!doctype html>
       知识点字典在 <code>knowledge_points</code>：编号、学期、大类、小类。
       给题目勾选后才写入关联表 <code>question_knowledge_points</code>。
       <a href="/">返回转换首页</a>
+      · <a href="/practice">知识点专项训练</a>
     </p>
 
     <section class="panel">

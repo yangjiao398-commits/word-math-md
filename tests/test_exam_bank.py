@@ -108,6 +108,17 @@ def test_guess_type_fill_blank_escaped_underscores():
     assert guess_type(stem, r"$\frac{3}{2}$", []) == "fill_blank"
 
 
+def test_normalize_knowledge_codes():
+    from word_math_md.exam_bank import normalize_knowledge_codes
+
+    assert normalize_knowledge_codes(["1.1", "1.1", " 2.3 ", "", "bad code"]) == [
+        "1.1",
+        "2.3",
+    ]
+    assert normalize_knowledge_codes(None) == []
+    assert len(normalize_knowledge_codes([f"1.{i}" for i in range(50)], limit=5)) == 5
+
+
 def test_questions_to_markdown_roundtrip_markers():
     md = questions_to_markdown(
         [
