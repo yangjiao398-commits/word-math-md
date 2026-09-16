@@ -61,8 +61,22 @@ def list_catalog(limit: int = 2000) -> list[dict[str, Any]]:
         code = row.get("knowledge_code")
         if code:
             counts[code] = counts.get(code, 0) + 1
+    anim_counts: dict[str, int] = {}
+    try:
+        anims = (
+            client.table("knowledge_geogebra_animations")
+            .select("knowledge_code")
+            .execute()
+        )
+        for row in anims.data or []:
+            code = row.get("knowledge_code")
+            if code:
+                anim_counts[code] = anim_counts.get(code, 0) + 1
+    except Exception:
+        anim_counts = {}
     for row in rows:
         row["question_count"] = counts.get(row["code"], 0)
+        row["animation_count"] = anim_counts.get(row["code"], 0)
     return rows
 
 

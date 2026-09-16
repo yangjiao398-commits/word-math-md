@@ -1,0 +1,1265 @@
+{
+  "book_id": "dyetmjzr",
+  "title": "高中数学教材配套资源【人教】",
+  "chapters": [
+    {
+      "id": "864439",
+      "title": "集合与常用逻辑用语",
+      "pages": [
+        {
+          "page_id": "puJeC3sG",
+          "material_id": "puJeC3sG",
+          "title": "交集与并集的动态展示",
+          "thumb_url": "https://www.geogebra.org/resource/puJeC3sG/bkEeWrzMOWXwzMPC/material-puJeC3sG-thumb$1.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        },
+        {
+          "page_id": "ywsrakfy",
+          "material_id": "kxsba9qj",
+          "title": "集合的识别",
+          "thumb_url": "https://www.geogebra.org/resource/kxsba9qj/EJDzt0jIkHMHU0t4/material-kxsba9qj-thumb$1.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        },
+        {
+          "page_id": "vabjssrs",
+          "material_id": "ff8bueet",
+          "title": "数集的关系",
+          "thumb_url": "https://www.geogebra.org/resource/ff8bueet/QFvs9PwtbKnSymD5/material-ff8bueet-thumb.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        },
+        {
+          "page_id": "xxkfnupm",
+          "material_id": "uv4nq7ze",
+          "title": "属于与不属于",
+          "thumb_url": "https://www.geogebra.org/resource/uv4nq7ze/EW2bia7MyyNssg20/material-uv4nq7ze-thumb.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        },
+        {
+          "page_id": "psaprgzf",
+          "material_id": "dm6d4zwc",
+          "title": "集合的运算",
+          "thumb_url": "https://www.geogebra.org/resource/dm6d4zwc/UspC1hAm7cJAUYNU/material-dm6d4zwc-thumb$1.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        },
+        {
+          "page_id": "s4qukubc",
+          "material_id": "s4qukubc",
+          "title": "高中必修一P9第5题",
+          "thumb_url": "https://www.geogebra.org/resource/s4qukubc/TiEKuK2ucMLWyAGc/material-s4qukubc-thumb$1.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        },
+        {
+          "page_id": "rgpa9hre",
+          "material_id": "rgpa9hre",
+          "title": "根据包含关系求参数例2",
+          "thumb_url": "https://www.geogebra.org/resource/rgpa9hre/66Mo88KvtIkLJYfE/material-rgpa9hre-thumb$1.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        },
+        {
+          "page_id": "jfp7qc8r",
+          "material_id": "jfp7qc8r",
+          "title": "根据包含关系求参数例3",
+          "thumb_url": "https://www.geogebra.org/resource/jfp7qc8r/WwcXHooas62UDNkM/material-jfp7qc8r-thumb$1.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        },
+        {
+          "page_id": "d7s4chyb",
+          "material_id": "d7s4chyb",
+          "title": "根据包含关系求参数例4",
+          "thumb_url": "https://www.geogebra.org/resource/d7s4chyb/xsbEShHbPXctriTI/material-d7s4chyb-thumb$1.png",
+          "chapter_id": "864439",
+          "chapter_title": "集合与常用逻辑用语"
+        }
+      ]
+    },
+    {
+      "id": "864440",
+      "title": "一元二次函数、方程和不等式",
+      "pages": [
+        {
+          "page_id": "efdjjjqn",
+          "material_id": "knbv3m7y",
+          "title": "P39 赵爽弦图",
+          "thumb_url": "https://www.geogebra.org/resource/knbv3m7y/GxXM01TIJ063mMr7/material-knbv3m7y-thumb.png",
+          "chapter_id": "864440",
+          "chapter_title": "一元二次函数、方程和不等式"
+        },
+        {
+          "page_id": "se6b6ddr",
+          "material_id": "q9rxs8w6",
+          "title": "P45 探究 基本不等式的几何解释",
+          "thumb_url": "https://www.geogebra.org/resource/q9rxs8w6/KLxqxDjYMhFHZu4x/material-q9rxs8w6-thumb$1.png",
+          "chapter_id": "864440",
+          "chapter_title": "一元二次函数、方程和不等式"
+        },
+        {
+          "page_id": "n48m5kvs",
+          "material_id": "wk5de9tx",
+          "title": "P58 习题9 八边形中面积最值问题",
+          "thumb_url": "https://www.geogebra.org/resource/wk5de9tx/CJbUKcIIIPqmJqUl/material-wk5de9tx-thumb$1.png",
+          "chapter_id": "864440",
+          "chapter_title": "一元二次函数、方程和不等式"
+        }
+      ]
+    },
+    {
+      "id": "864441",
+      "title": "函数的概念与性质",
+      "pages": [
+        {
+          "page_id": "psz6ztdr",
+          "material_id": "swfxfqyz",
+          "title": "函数的单调性(一):单调递增",
+          "thumb_url": "https://www.geogebra.org/resource/swfxfqyz/sh5irJRGeL8BuKbI/material-swfxfqyz-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "jjmy8b6q",
+          "material_id": "uevkepnm",
+          "title": "函数的单调性(二):单调递减",
+          "thumb_url": "https://www.geogebra.org/resource/uevkepnm/EvUTWWVuKXfwNn48/material-uevkepnm-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "qeehaep7",
+          "material_id": "xpbf6qum",
+          "title": "三次函数图象",
+          "thumb_url": "https://www.geogebra.org/resource/xpbf6qum/OnYDpojMkgaRx9os/material-xpbf6qum-thumb.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "x8zvmjam",
+          "material_id": "g8qmxjee",
+          "title": "三次函数的图象及对称性",
+          "thumb_url": "https://www.geogebra.org/resource/g8qmxjee/rrUz6KOaoFZOyijV/material-g8qmxjee-thumb.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "wwuedgb6",
+          "material_id": "mjc8ajje",
+          "title": "P68页 例6 最大值函数举例",
+          "thumb_url": "https://www.geogebra.org/resource/mjc8ajje/mFfh8jutztJiSbjS/material-mjc8ajje-thumb.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "zwyhwsph",
+          "material_id": "y3jtj2t7",
+          "title": "奇函数实例分析",
+          "thumb_url": "https://www.geogebra.org/resource/y3jtj2t7/bj5QcFjqbnsZjnA1/material-y3jtj2t7-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "x7yvyrec",
+          "material_id": "jcjt7vcv",
+          "title": "偶函数实例分析",
+          "thumb_url": "https://www.geogebra.org/resource/jcjt7vcv/zwm8kaeHzCV4LPFG/material-jcjt7vcv-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "fynrpuyr",
+          "material_id": "vn7g8bwe",
+          "title": "简单幂函数的图象和性质",
+          "thumb_url": "https://www.geogebra.org/resource/vn7g8bwe/CljtkUjfi5m0eZGQ/material-vn7g8bwe-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "jgmpwxfu",
+          "material_id": "mja72uak",
+          "title": "函数的奇偶性与幂函数",
+          "thumb_url": "https://www.geogebra.org/resource/mja72uak/FagiLN6LcfOHUemW/material-mja72uak-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "pahg7zbw",
+          "material_id": "bqnrraqd",
+          "title": "折叠中的三角形面积的最值问题",
+          "thumb_url": "https://www.geogebra.org/resource/bqnrraqd/0OBLfu6SIQgqWa7N/material-bqnrraqd-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "uqdc3nxx",
+          "material_id": "rekugqqn",
+          "title": "函数图像变换",
+          "thumb_url": "https://www.geogebra.org/resource/rekugqqn/WyH8g1fzPGRZUFfJ/material-rekugqqn-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "wanrhtzs",
+          "material_id": "jsbyu3t5",
+          "title": "任意周期函数绘制",
+          "thumb_url": "https://www.geogebra.org/resource/jsbyu3t5/T8gXbwvbqqvjlnMI/material-jsbyu3t5-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "ttwkz9ny",
+          "material_id": "ttwkz9ny",
+          "title": "必修一P68例6",
+          "thumb_url": "https://www.geogebra.org/resource/ttwkz9ny/mcdLtj7SnFcjJ8uB/material-ttwkz9ny-thumb.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "y2fdmwc4",
+          "material_id": "y2fdmwc4",
+          "title": "必修一P73 11",
+          "thumb_url": "https://www.geogebra.org/resource/y2fdmwc4/ZpvZYqex9O25T3Tz/material-y2fdmwc4-thumb.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "cbvdbv8y",
+          "material_id": "cbvdbv8y",
+          "title": "必修一P83偶函数的定义",
+          "thumb_url": "https://www.geogebra.org/resource/cbvdbv8y/bZPwREXgwNQmEvfq/material-cbvdbv8y-thumb.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "a2m2a3nr",
+          "material_id": "a2m2a3nr",
+          "title": "必修一P84奇函数的定义",
+          "thumb_url": "https://www.geogebra.org/resource/a2m2a3nr/LdSag5b282KBfA52/material-a2m2a3nr-thumb.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "wvztc5kt",
+          "material_id": "cctvyhtv",
+          "title": "P85 习题10 靠墙矩形的面积最值问题",
+          "thumb_url": "https://www.geogebra.org/resource/cctvyhtv/5uYOdfMKxZuqEdd1/material-cctvyhtv-thumb$1.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        },
+        {
+          "page_id": "utm9cw4k",
+          "material_id": "utm9cw4k",
+          "title": "必修一P90五种幂函数的图象",
+          "thumb_url": "https://www.geogebra.org/resource/utm9cw4k/CqaIJdQeCLLhISvE/material-utm9cw4k-thumb.png",
+          "chapter_id": "864441",
+          "chapter_title": "函数的概念与性质"
+        }
+      ]
+    },
+    {
+      "id": "864442",
+      "title": "指数函数与对数函数",
+      "pages": [
+        {
+          "page_id": "esye2ynr",
+          "material_id": "ehaswmjn",
+          "title": "指数函数的图象",
+          "thumb_url": "https://www.geogebra.org/resource/ehaswmjn/B4wHyfr0IcOY2KrE/material-ehaswmjn-thumb$1.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "wcammztx",
+          "material_id": "ynqc4xwh",
+          "title": "指数函数图像",
+          "thumb_url": "https://www.geogebra.org/resource/ynqc4xwh/vbfojPigrVGjpX7W/material-ynqc4xwh-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "ctxu7rtc",
+          "material_id": "qvgwpyc3",
+          "title": "指数函数的图像",
+          "thumb_url": "https://www.geogebra.org/resource/qvgwpyc3/CvZ4aiZARzPkvBhG/material-qvgwpyc3-thumb$1.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "w9e8mfgh",
+          "material_id": "gzxrefxu",
+          "title": "对数函数图像",
+          "thumb_url": "https://www.geogebra.org/resource/gzxrefxu/dDPxnQwwO244LHFU/material-gzxrefxu-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "sghr3tbx",
+          "material_id": "gnpdjnhf",
+          "title": "对数函数图象的绘制",
+          "thumb_url": "https://www.geogebra.org/resource/gnpdjnhf/Z0IbXenW8XcET3qO/material-gnpdjnhf-thumb$1.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "sbj22aks",
+          "material_id": "drx3auw8",
+          "title": "对数函数图象和性质",
+          "thumb_url": "https://www.geogebra.org/resource/drx3auw8/r6dBca4uhx6PTCvs/material-drx3auw8-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "dmyshxpj",
+          "material_id": "acfswhja",
+          "title": "指数函数与对数函数的关系",
+          "thumb_url": "https://www.geogebra.org/resource/acfswhja/OYl4vbMo3xVEYQ0T/material-acfswhja-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "p8jq7pr3",
+          "material_id": "kcw5yvu5",
+          "title": "无理数指数幂",
+          "thumb_url": "https://www.geogebra.org/resource/kcw5yvu5/Domb6JTUMD6XWe6G/material-kcw5yvu5-thumb$1.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "rff6bt9s",
+          "material_id": "egqsndjb",
+          "title": "常用函数系列1（一次与对数）",
+          "thumb_url": "https://www.geogebra.org/resource/egqsndjb/wsPc2424l7dG10j2/material-egqsndjb-thumb$1.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "ncrzvuaz",
+          "material_id": "skmjuxdn",
+          "title": "常用函数系列2（一次与指数）",
+          "thumb_url": "https://www.geogebra.org/resource/skmjuxdn/BlQMhu6kxkh8jD2H/material-skmjuxdn-thumb$1.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "ssq7fmhj",
+          "material_id": "z9sztqyg",
+          "title": "探究指数函数的性质",
+          "thumb_url": "https://www.geogebra.org/resource/z9sztqyg/Ca3r47T6d18Fsn3M/material-z9sztqyg-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "ywdc7hhx",
+          "material_id": "w7fpecne",
+          "title": "探究幂函数的性质",
+          "thumb_url": "https://www.geogebra.org/resource/w7fpecne/mpi0KHAHkb3lrlHT/material-w7fpecne-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "aS9en4ab",
+          "material_id": "aS9en4ab",
+          "title": "指数函数&对数函数图像",
+          "thumb_url": "https://www.geogebra.org/resource/aS9en4ab/yGOPhOjT0AoFBQ4I/material-aS9en4ab-thumb$1.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "q64zgwe3",
+          "material_id": "q64zgwe3",
+          "title": "必修一P118例4",
+          "thumb_url": "https://www.geogebra.org/resource/q64zgwe3/icY3dTIGEbecH6sJ/material-q64zgwe3-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "krrczk93",
+          "material_id": "gcujh624",
+          "title": "求方程的实数解的个数人教A版必修第一册143页",
+          "thumb_url": "https://www.geogebra.org/resource/gcujh624/Gt4TJfXlbtRlBNKY/material-gcujh624-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        },
+        {
+          "page_id": "et8uqgvj",
+          "material_id": "jhgejwn8",
+          "title": "人教A版必修一146页例题二分法",
+          "thumb_url": "https://www.geogebra.org/resource/jhgejwn8/F07G5VsLxv24MDJG/material-jhgejwn8-thumb.png",
+          "chapter_id": "864442",
+          "chapter_title": "指数函数与对数函数"
+        }
+      ]
+    },
+    {
+      "id": "864443",
+      "title": "三角函数",
+      "pages": [
+        {
+          "page_id": "mmvvvy5f",
+          "material_id": "fuxvr328",
+          "title": "任意角",
+          "thumb_url": "https://www.geogebra.org/resource/fuxvr328/hgFiBHuKDxBZLqna/material-fuxvr328-thumb.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "dddg5u3d",
+          "material_id": "mnbhrmzj",
+          "title": "角的扩充-正角",
+          "thumb_url": "https://www.geogebra.org/resource/mnbhrmzj/f2IAhWu4OFMl8llB/material-mnbhrmzj-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "ghvcmejz",
+          "material_id": "fwq8bcnk",
+          "title": "角的扩充-负角",
+          "thumb_url": "https://www.geogebra.org/resource/fwq8bcnk/TXg4KkC0s77gi3Pp/material-fwq8bcnk-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "rtjvxnw8",
+          "material_id": "w72ktvzv",
+          "title": "弧度制",
+          "thumb_url": "https://www.geogebra.org/resource/w72ktvzv/1dFtk5hIdEX7zLC8/material-w72ktvzv-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "pjyupphm",
+          "material_id": "dmvdsnmk",
+          "title": "1弧度的角（1）",
+          "thumb_url": "https://www.geogebra.org/resource/dmvdsnmk/sen3IgkbgyTjXp6i/material-dmvdsnmk-thumb.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "rrer7xzg",
+          "material_id": "quqaxdcy",
+          "title": "象限角",
+          "thumb_url": "https://www.geogebra.org/resource/quqaxdcy/j5rECGd7VMyitAj3/material-quqaxdcy-thumb.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "vmfajmuw",
+          "material_id": "x2ghquyk",
+          "title": "三角函数的定义",
+          "thumb_url": "https://www.geogebra.org/resource/x2ghquyk/IwexUPc1hkwzOc2s/material-x2ghquyk-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "gtw48a2k",
+          "material_id": "qynmrmmy",
+          "title": "诱导公式",
+          "thumb_url": "https://www.geogebra.org/resource/qynmrmmy/Ql9Ulseu3cU46UDG/material-qynmrmmy-thumb.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "spfajn4p",
+          "material_id": "xpuuzgp7",
+          "title": "三角函数线",
+          "thumb_url": "https://www.geogebra.org/resource/xpuuzgp7/wvTlDbeqDthYZHcn/material-xpuuzgp7-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "jax9wgxz",
+          "material_id": "sunhamvy",
+          "title": "正弦函数的图像",
+          "thumb_url": "https://www.geogebra.org/resource/sunhamvy/Z87jANikBHCVI1Z1/material-sunhamvy-thumb.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "psecc3td",
+          "material_id": "zxxxgqd3",
+          "title": "正弦函数的图像",
+          "thumb_url": "https://www.geogebra.org/resource/zxxxgqd3/ZChpwm4EXPiMUEKc/material-zxxxgqd3-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "wskdqdx2",
+          "material_id": "q8dqxmp8",
+          "title": "任意角的三角函数",
+          "thumb_url": "https://www.geogebra.org/resource/q8dqxmp8/kJDZjzi1gQU8cFLX/material-q8dqxmp8-thumb.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "a7eqr2sn",
+          "material_id": "dxnvfzef",
+          "title": "周期性",
+          "thumb_url": "https://www.geogebra.org/resource/dxnvfzef/0PD5JNw6deQJ11Hl/material-dxnvfzef-thumb.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "jhryn3hd",
+          "material_id": "jrx6wuex",
+          "title": "三角函数图象变换",
+          "thumb_url": "https://www.geogebra.org/resource/jrx6wuex/E7yK52SibOL7AJUi/material-jrx6wuex-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "yujempd5",
+          "material_id": "jwk2gfj7",
+          "title": "扇形内接矩形面积最值分析",
+          "thumb_url": "https://www.geogebra.org/resource/jwk2gfj7/Fuu0XJpmbYRL2BeU/material-jwk2gfj7-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        },
+        {
+          "page_id": "wnv3t8yf",
+          "material_id": "adjabvfn",
+          "title": "三角形的射影定理",
+          "thumb_url": "https://www.geogebra.org/resource/adjabvfn/z7MjeVOy0fsjLXqm/material-adjabvfn-thumb$1.png",
+          "chapter_id": "864443",
+          "chapter_title": "三角函数"
+        }
+      ]
+    },
+    {
+      "id": "864444",
+      "title": "平面向量及其应用",
+      "pages": [
+        {
+          "page_id": "axxbmwww",
+          "material_id": "u63fev2f",
+          "title": "向量的加减法",
+          "thumb_url": "https://www.geogebra.org/resource/u63fev2f/af5uJSmYK2EInU8c/material-u63fev2f-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "rr2bfjke",
+          "material_id": "a3fdxec5",
+          "title": "向量的数乘",
+          "thumb_url": "https://www.geogebra.org/resource/a3fdxec5/eivekbrRAOctsqpn/material-a3fdxec5-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "gqcdm32a",
+          "material_id": "zprmwff8",
+          "title": "平面向量基本定理",
+          "thumb_url": "https://www.geogebra.org/resource/zprmwff8/W6Sqt2pqHczy7Om3/material-zprmwff8-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "tnxwuxgn",
+          "material_id": "htp8sj9j",
+          "title": "平面向量基本定理",
+          "thumb_url": "https://www.geogebra.org/resource/htp8sj9j/dEKAAODu8Cs5nK3v/material-htp8sj9j-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "edauth4r",
+          "material_id": "htz8hkbe",
+          "title": "平面向量基本定理",
+          "thumb_url": "https://www.geogebra.org/resource/htz8hkbe/PbadyHspMRg1XuUM/material-htz8hkbe-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "nzquyrze",
+          "material_id": "wkthd9zw",
+          "title": "向量的投影",
+          "thumb_url": "https://www.geogebra.org/resource/wkthd9zw/VKqPA7O3xuLJkgup/material-wkthd9zw-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "qpjh53rm",
+          "material_id": "kuq6vexy",
+          "title": "向量的数量积",
+          "thumb_url": "https://www.geogebra.org/resource/kuq6vexy/I4xQDcrsvkS7kjxV/material-kuq6vexy-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "fzw2dqkz",
+          "material_id": "pfeatpsy",
+          "title": "平面向量三点共线定理",
+          "thumb_url": "https://www.geogebra.org/resource/pfeatpsy/4GXTSxFr5DahrkCB/material-pfeatpsy-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "vxvdtprp",
+          "material_id": "wd2ym6em",
+          "title": "平面向量奔驰定理",
+          "thumb_url": "https://www.geogebra.org/resource/wd2ym6em/HHPc2LPDICNkpRVq/material-wd2ym6em-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "baej86ba",
+          "material_id": "re35dp2u",
+          "title": "向量的加法",
+          "thumb_url": "https://www.geogebra.org/resource/re35dp2u/z5avMt5YMf6C6Smx/material-re35dp2u-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "fku4php6",
+          "material_id": "fhmu8kjw",
+          "title": "向量的减法",
+          "thumb_url": "https://www.geogebra.org/resource/fhmu8kjw/kABCdWKXXAbwG432/material-fhmu8kjw-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "gqsxmhdd",
+          "material_id": "psvujfp6",
+          "title": "投影向量",
+          "thumb_url": "https://www.geogebra.org/resource/psvujfp6/QzGn0uw5mHaLu2wW/material-psvujfp6-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "rhfgrgv8",
+          "material_id": "cmwsn6xa",
+          "title": "用向量投影证明数量积分配律",
+          "thumb_url": "https://www.geogebra.org/resource/cmwsn6xa/6pLKB2cdGpBVCsL4/material-cmwsn6xa-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "aqem4acf",
+          "material_id": "eysgwdw6",
+          "title": "向量在物理中的应用举例(一)：例3",
+          "thumb_url": "https://www.geogebra.org/resource/eysgwdw6/U3eGSsRosLIh4WzA/material-eysgwdw6-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "tktnb4yp",
+          "material_id": "gevhyzxf",
+          "title": "向量在物理中的应用举例(二)：例4",
+          "thumb_url": "https://www.geogebra.org/resource/gevhyzxf/jPHgVPD5JRlYNAz1/material-gevhyzxf-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "jmyayvn4",
+          "material_id": "uzezfvxm",
+          "title": "正弦定理",
+          "thumb_url": "https://www.geogebra.org/resource/uzezfvxm/Zjy4JVNce1LMMAgN/material-uzezfvxm-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "jqch9vqu",
+          "material_id": "ner3yqvw",
+          "title": "余弦定理",
+          "thumb_url": "https://www.geogebra.org/resource/ner3yqvw/vT2PHPXzNXGhOTlx/material-ner3yqvw-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "w2sapjhh",
+          "material_id": "fddj9uat",
+          "title": "两点间的距离",
+          "thumb_url": "https://www.geogebra.org/resource/fddj9uat/x4qcJQs16iybt8r8/material-fddj9uat-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        },
+        {
+          "page_id": "dyqmc43x",
+          "material_id": "c7h2kbea",
+          "title": "曲柄连杆问题",
+          "thumb_url": "https://www.geogebra.org/resource/c7h2kbea/IonnH0iip6eJJFcZ/material-c7h2kbea-thumb$1.png",
+          "chapter_id": "864444",
+          "chapter_title": "平面向量及其应用"
+        }
+      ]
+    },
+    {
+      "id": "864445",
+      "title": "复数",
+      "pages": [
+        {
+          "page_id": "xnhafjb5",
+          "material_id": "wzwjavkb",
+          "title": "7.1.2复数的几何意义(P70页 7.1.2由复数找点坐标 小游戏）",
+          "thumb_url": "https://www.geogebra.org/resource/wzwjavkb/wZO8fZrHOpZ2e9OW/material-wzwjavkb-thumb.png",
+          "chapter_id": "864445",
+          "chapter_title": "复数"
+        },
+        {
+          "page_id": "es6jmjew",
+          "material_id": "qdyewvhs",
+          "title": "7.1.2 复数的几何意义（P70页 7.1-2由点写复数 小游戏)",
+          "thumb_url": "https://www.geogebra.org/resource/qdyewvhs/iNSMTZsoaG8yUlkp/material-qdyewvhs-thumb.png",
+          "chapter_id": "864445",
+          "chapter_title": "复数"
+        },
+        {
+          "page_id": "fe3yssg9",
+          "material_id": "nutmfzyw",
+          "title": "7.1.1 复数的概念（P69页 实部与虚部判断 小游戏）",
+          "thumb_url": "https://www.geogebra.org/resource/nutmfzyw/M2bLXqvINjN02Z5y/material-nutmfzyw-thumb.png",
+          "chapter_id": "864445",
+          "chapter_title": "复数"
+        }
+      ]
+    },
+    {
+      "id": "864446",
+      "title": "立体几何初步",
+      "pages": [
+        {
+          "page_id": "nf9mbppw",
+          "material_id": "kgpj32cw",
+          "title": "祖暅原理（卡巴列斯）",
+          "thumb_url": "https://www.geogebra.org/resource/kgpj32cw/fOv9SAVifxXLuc0S/material-kgpj32cw-thumb.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "bujkpwav",
+          "material_id": "bujkpwav",
+          "title": "祖暅原理(卡瓦列里原理)与球的体积",
+          "thumb_url": "https://www.geogebra.org/resource/bujkpwav/BpNhxcp5mX17PgKA/material-bujkpwav-thumb.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "ad4xy35f",
+          "material_id": "ad4xy35f",
+          "title": "祖暅原理求球体体积",
+          "thumb_url": "https://www.geogebra.org/resource/ad4xy35f/32ZvC0JryP4RKahK/material-ad4xy35f-thumb.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "nf3smvsa",
+          "material_id": "kvpucd5v",
+          "title": "8.5.2  （一）平面与平面平行的判定",
+          "thumb_url": "https://www.geogebra.org/resource/kvpucd5v/jzKZsTt5gz4jRnvy/material-kvpucd5v-thumb$1.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "pkdhf2zb",
+          "material_id": "yj6na5gn",
+          "title": "8.5.2  （二）平面与平面平行的性质",
+          "thumb_url": "https://www.geogebra.org/resource/yj6na5gn/QIuZJc3PqGeUzLYV/material-yj6na5gn-thumb$1.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "pztkgp6k",
+          "material_id": "tdtvsrgz",
+          "title": "8.6.2直线与平面垂直概念",
+          "thumb_url": "https://www.geogebra.org/resource/tdtvsrgz/rHDOwJqjtyg75AI7/material-tdtvsrgz-thumb$1.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "nbt7s8s9",
+          "material_id": "stkq6mbq",
+          "title": "8.6.3折纸实验和线面垂直的判定定理",
+          "thumb_url": "https://www.geogebra.org/resource/stkq6mbq/DBUH8rjpJCHpTq1H/material-stkq6mbq-thumb$1.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "hvcp6hvp",
+          "material_id": "guzayzj6",
+          "title": "正三棱柱一例",
+          "thumb_url": "https://www.geogebra.org/resource/guzayzj6/kqkUvCcGQkhO3CMy/material-guzayzj6-thumb$1.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "wrr886jj",
+          "material_id": "sg267djq",
+          "title": "立体几何折叠问题一例",
+          "thumb_url": "https://www.geogebra.org/resource/sg267djq/YiTyloiCKkaklxgK/material-sg267djq-thumb$1.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "swftfgqv",
+          "material_id": "aqcmgmzb",
+          "title": "任意三棱锥的外接球",
+          "thumb_url": "https://www.geogebra.org/resource/aqcmgmzb/vNtOpBUc5IiU83JV/material-aqcmgmzb-thumb$1.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "jaqfra6v",
+          "material_id": "jaqfra6v",
+          "title": "祖暅原理(卡瓦列里原理)与球的体积 ",
+          "thumb_url": "https://www.geogebra.org/resource/jaqfra6v/7uf9mQIPgALEG62r/material-jaqfra6v-thumb.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        },
+        {
+          "page_id": "pwm4q6pw",
+          "material_id": "fhrqgagc",
+          "title": "  四棱锥的外接球",
+          "thumb_url": "https://www.geogebra.org/resource/fhrqgagc/cN0tSwVJrZ1340ym/material-fhrqgagc-thumb$1.png",
+          "chapter_id": "864446",
+          "chapter_title": "立体几何初步"
+        }
+      ]
+    },
+    {
+      "id": "864447",
+      "title": "统计",
+      "pages": [
+        {
+          "page_id": "sqgdnkud",
+          "material_id": "ktydwk7d",
+          "title": "频率分布直方图",
+          "thumb_url": "https://www.geogebra.org/resource/ktydwk7d/iUAbIqIhQTt4RGy7/material-ktydwk7d-thumb.png",
+          "chapter_id": "864447",
+          "chapter_title": "统计"
+        },
+        {
+          "page_id": "hdutkwtw",
+          "material_id": "rmnnnnha",
+          "title": "随机数表法简单随机抽样",
+          "thumb_url": "https://www.geogebra.org/resource/rmnnnnha/ceXGs1lHf8U1pjYm/material-rmnnnnha-thumb.png",
+          "chapter_id": "864447",
+          "chapter_title": "统计"
+        },
+        {
+          "page_id": "wtacanpd",
+          "material_id": "kdkcrfzq",
+          "title": "转盘法简单随机抽样",
+          "thumb_url": "https://www.geogebra.org/resource/kdkcrfzq/rfMfI5pg5oQpS9CV/material-kdkcrfzq-thumb.png",
+          "chapter_id": "864447",
+          "chapter_title": "统计"
+        }
+      ]
+    },
+    {
+      "id": "864448",
+      "title": "概率",
+      "pages": [
+        {
+          "page_id": "mnmtam4a",
+          "material_id": "unjufj9p",
+          "title": "高中数学必修 概率例题 抽奖",
+          "thumb_url": "https://www.geogebra.org/resource/unjufj9p/f5pNWNSA6DHb40KN/material-unjufj9p-thumb$1.png",
+          "chapter_id": "864448",
+          "chapter_title": "概率"
+        },
+        {
+          "page_id": "vqgmmkbk",
+          "material_id": "sva65myh",
+          "title": "高中数学 概率统计 例题 抽奖",
+          "thumb_url": "https://www.geogebra.org/resource/sva65myh/FCneNASKkmYeHHVe/material-sva65myh-thumb$1.png",
+          "chapter_id": "864448",
+          "chapter_title": "概率"
+        }
+      ]
+    },
+    {
+      "id": "864487",
+      "title": "空间向量与立体几何",
+      "pages": [
+        {
+          "page_id": "jcbw4wh8",
+          "material_id": "hvjh4d5a",
+          "title": "1.4.2 平面法向量的概念",
+          "thumb_url": "https://www.geogebra.org/resource/hvjh4d5a/Y4JyiNTc7qgW4lQ0/material-hvjh4d5a-thumb$1.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        },
+        {
+          "page_id": "fuarckfv",
+          "material_id": "jvaqfxzq",
+          "title": "1.4.3 利用空间向量判断两条直线平行",
+          "thumb_url": "https://www.geogebra.org/resource/jvaqfxzq/FeHVZUTokZLjOwYQ/material-jvaqfxzq-thumb$1.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        },
+        {
+          "page_id": "teebcktw",
+          "material_id": "sa8xukzs",
+          "title": "1.4.4利用空间向量判断直线与平面平行",
+          "thumb_url": "https://www.geogebra.org/resource/sa8xukzs/Gv3WMud8t7UaRCdg/material-sa8xukzs-thumb$1.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        },
+        {
+          "page_id": "b4zhgmv3",
+          "material_id": "dpqdkhr4",
+          "title": "1.4.5利用空间向量判断平面与平面平行",
+          "thumb_url": "https://www.geogebra.org/resource/dpqdkhr4/wCMqHKf3K3Q83qyV/material-dpqdkhr4-thumb$1.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        },
+        {
+          "page_id": "zas5uwgw",
+          "material_id": "nvpamtqd",
+          "title": "1.4.6利用空间向量判断两直线垂直",
+          "thumb_url": "https://www.geogebra.org/resource/nvpamtqd/qoWq7k0WHGEPbsOv/material-nvpamtqd-thumb.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        },
+        {
+          "page_id": "kvyjw7jz",
+          "material_id": "kexy65vs",
+          "title": "1.4.7利用空间向量判断直线与平面垂直",
+          "thumb_url": "https://www.geogebra.org/resource/kexy65vs/CnFqgAECFYsSysp4/material-kexy65vs-thumb.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        },
+        {
+          "page_id": "mrtpgzzv",
+          "material_id": "zhcmajsa",
+          "title": "1.4.8利用空间向量判断平面与平面垂直",
+          "thumb_url": "https://www.geogebra.org/resource/zhcmajsa/1a6dGK5DW5n0lige/material-zhcmajsa-thumb.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        },
+        {
+          "page_id": "exjqwnps",
+          "material_id": "pp6kmg6r",
+          "title": "1.4.9利用空间向量求点到直线的距离",
+          "thumb_url": "https://www.geogebra.org/resource/pp6kmg6r/rPTZULcPxiiy9RMR/material-pp6kmg6r-thumb.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        },
+        {
+          "page_id": "mjcwpvzc",
+          "material_id": "dggamsds",
+          "title": "1.4.10利用空间向量求点到平面的距离",
+          "thumb_url": "https://www.geogebra.org/resource/dggamsds/Kz6vkxVcHYNQ00zZ/material-dggamsds-thumb.png",
+          "chapter_id": "864487",
+          "chapter_title": "空间向量与立体几何"
+        }
+      ]
+    },
+    {
+      "id": "864489",
+      "title": "直线和圆的方程",
+      "pages": [
+        {
+          "page_id": "maxmstxk",
+          "material_id": "tckbah9h",
+          "title": "直线的截距式方程",
+          "thumb_url": "https://www.geogebra.org/resource/tckbah9h/UjNEcBR0wLzOyhgL/material-tckbah9h-thumb$1.png",
+          "chapter_id": "864489",
+          "chapter_title": "直线和圆的方程"
+        },
+        {
+          "page_id": "bbt27e3a",
+          "material_id": "rj3yss5e",
+          "title": "点到直线的距离",
+          "thumb_url": "https://www.geogebra.org/resource/rj3yss5e/hHklXivqtg2s1Xtj/material-rj3yss5e-thumb$1.png",
+          "chapter_id": "864489",
+          "chapter_title": "直线和圆的方程"
+        },
+        {
+          "page_id": "vhg96ms4",
+          "material_id": "z6xm7aub",
+          "title": "2.6.2 阿波罗尼斯圆",
+          "thumb_url": "https://www.geogebra.org/resource/z6xm7aub/tXYyYRHyz6Zd5RxK/material-z6xm7aub-thumb$1.png",
+          "chapter_id": "864489",
+          "chapter_title": "直线和圆的方程"
+        }
+      ]
+    },
+    {
+      "id": "864490",
+      "title": "圆锥曲线的方程",
+      "pages": [
+        {
+          "page_id": "ytrgctas",
+          "material_id": "ysnamf4f",
+          "title": "圆锥曲线的生成",
+          "thumb_url": "https://www.geogebra.org/resource/ysnamf4f/LpNUcu4FFufxja7k/material-ysnamf4f-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "ntbkfb8w",
+          "material_id": "fzu2rpse",
+          "title": "圆锥曲线的统一定义",
+          "thumb_url": "https://www.geogebra.org/resource/fzu2rpse/MeCOtekkeEmhHFTx/material-fzu2rpse-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "pgmskhbf",
+          "material_id": "eum3nrzk",
+          "title": "圆锥曲线中经典的定点问题1",
+          "thumb_url": "https://www.geogebra.org/resource/eum3nrzk/6l1SCzMql1SUebi1/material-eum3nrzk-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "v6fystsh",
+          "material_id": "ard6ux5g",
+          "title": "圆锥曲线中经典的定点问题2",
+          "thumb_url": "https://www.geogebra.org/resource/ard6ux5g/j9j8mgCjAzYUJhKK/material-ard6ux5g-thumb.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "y7f5pgs3",
+          "material_id": "m3scdwqs",
+          "title": "二分法求函数零点值",
+          "thumb_url": "https://www.geogebra.org/resource/m3scdwqs/uIKHTMHPnDzCLVSl/material-m3scdwqs-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "yejebxfn",
+          "material_id": "cu7awy74",
+          "title": "一类圆锥曲线的定点问题",
+          "thumb_url": "https://www.geogebra.org/resource/cu7awy74/0XtyP4eyN2mNOZD8/material-cu7awy74-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "hfszr6re",
+          "material_id": "hesnc7vs",
+          "title": "椭圆定义",
+          "thumb_url": "https://www.geogebra.org/resource/hesnc7vs/TeYcFjvXeiXo6WWb/material-hesnc7vs-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "cwjg7k9z",
+          "material_id": "bpbru47d",
+          "title": "椭圆的离心率",
+          "thumb_url": "https://www.geogebra.org/resource/bpbru47d/Dl1Vr7qWYQbzt4eS/material-bpbru47d-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "feh6vd73",
+          "material_id": "d3nkdckd",
+          "title": "椭圆的光学性质",
+          "thumb_url": "https://www.geogebra.org/resource/d3nkdckd/pXyzfebF7qCOZwmu/material-d3nkdckd-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "hjuxtt2v",
+          "material_id": "uvpnaptb",
+          "title": "椭圆的第一定义",
+          "thumb_url": "https://www.geogebra.org/resource/uvpnaptb/J8OkRgJvzniopMIB/material-uvpnaptb-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "zre4235c",
+          "material_id": "zysj2dmz",
+          "title": "椭圆的第二定义",
+          "thumb_url": "https://www.geogebra.org/resource/zysj2dmz/w74RKAQgkGV1IIlQ/material-zysj2dmz-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "yfgbqxg6",
+          "material_id": "zp7a4c8y",
+          "title": "双曲线的基础性质",
+          "thumb_url": "https://www.geogebra.org/resource/zp7a4c8y/J1vS4s8oLQqi0no4/material-zp7a4c8y-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "akkpxbeq",
+          "material_id": "cybxzqvn",
+          "title": "双曲线的光学性质",
+          "thumb_url": "https://www.geogebra.org/resource/cybxzqvn/IE8DLxxOjOI1xVtH/material-cybxzqvn-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "u92awqea",
+          "material_id": "be6xjabv",
+          "title": "抛物线的第一定义",
+          "thumb_url": "https://www.geogebra.org/resource/be6xjabv/6ra7OIzmDUKKJBTc/material-be6xjabv-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "m3aqzqgu",
+          "material_id": "a34yqcvf",
+          "title": "抛物线的光学性质",
+          "thumb_url": "https://www.geogebra.org/resource/a34yqcvf/1rmYfMy2zL5LXKgX/material-a34yqcvf-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "quv45dut",
+          "material_id": "xwpabtfq",
+          "title": "圆锥曲线的统一定义",
+          "thumb_url": "https://www.geogebra.org/resource/xwpabtfq/BtzBjuTOOtvEwZNp/material-xwpabtfq-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "wz8nvbwn",
+          "material_id": "jmxjsw8d",
+          "title": "轨迹为双曲线的课例2",
+          "thumb_url": "https://www.geogebra.org/resource/jmxjsw8d/l0h6cxValXFIAXKM/material-jmxjsw8d-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "heszhnyw",
+          "material_id": "fpwgcc9d",
+          "title": "轨迹为椭圆问题的课例1",
+          "thumb_url": "https://www.geogebra.org/resource/fpwgcc9d/Y3CEuLTVExYwuqnf/material-fpwgcc9d-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "wrb5ndaf",
+          "material_id": "besnabny",
+          "title": "轨迹为椭圆问题的课例2",
+          "thumb_url": "https://www.geogebra.org/resource/besnabny/aDZehoRKZXwLJxG2/material-besnabny-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "u4kdtmsa",
+          "material_id": "grbkwrv9",
+          "title": "双曲线的第二定义",
+          "thumb_url": "https://www.geogebra.org/resource/grbkwrv9/outxNiMWZKaMtzPQ/material-grbkwrv9-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "cebanxdb",
+          "material_id": "trmevcec",
+          "title": "圆锥曲线中经典的定值问题2",
+          "thumb_url": "https://www.geogebra.org/resource/trmevcec/5KgwYJmtRusQ1wwV/material-trmevcec-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "syczbvds",
+          "material_id": "sunruhpc",
+          "title": "与两圆相外切圆心的轨迹",
+          "thumb_url": "https://www.geogebra.org/resource/sunruhpc/QIb6NjgJdq1fzu2z/material-sunruhpc-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "cwvgfvqy",
+          "material_id": "yuzurqrd",
+          "title": "画椭圆",
+          "thumb_url": "https://www.geogebra.org/resource/yuzurqrd/vygYQfHWef6hqge7/material-yuzurqrd-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "q9eqz2b7",
+          "material_id": "vkcj7dc2",
+          "title": "斜率乘积为e²-1椭圆（1）",
+          "thumb_url": "https://www.geogebra.org/resource/vkcj7dc2/GTE7hwjy3uNsOWee/material-vkcj7dc2-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "gpekry5w",
+          "material_id": "w2uqzxvn",
+          "title": "双曲线与直线的一个性质",
+          "thumb_url": "https://www.geogebra.org/resource/w2uqzxvn/QpN5rBKHVoEaitwc/material-w2uqzxvn-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "b49ntapn",
+          "material_id": "rxurcfdm",
+          "title": "结论为e²-1的第3种情况",
+          "thumb_url": "https://www.geogebra.org/resource/rxurcfdm/COvPWSXG3daD7vrm/material-rxurcfdm-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "hdukkskt",
+          "material_id": "tyzjqt76",
+          "title": "斜率乘积为e²-1椭圆（2）",
+          "thumb_url": "https://www.geogebra.org/resource/tyzjqt76/KkwsmDV7bnUxC3xH/material-tyzjqt76-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "rcdzjpa4",
+          "material_id": "b7fcztr2",
+          "title": "有关圆锥曲线切线的一组性质",
+          "thumb_url": "https://www.geogebra.org/resource/b7fcztr2/AkPh4MDDBN8bFldH/material-b7fcztr2-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "uvj6fezd",
+          "material_id": "nctba2bf",
+          "title": "椭圆变圆",
+          "thumb_url": "https://www.geogebra.org/resource/nctba2bf/k2ozQ4DydAoZLFOx/material-nctba2bf-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "uzcvp6jx",
+          "material_id": "jmcppdmj",
+          "title": "对一类圆锥曲线中斜率定值问题的探究_数学通讯2021.9",
+          "thumb_url": "https://www.geogebra.org/resource/jmcppdmj/b1sFUDXS5O2YtZUC/material-jmcppdmj-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        },
+        {
+          "page_id": "yejebxfn",
+          "material_id": "cu7awy74",
+          "title": "一类圆锥曲线的定点问题",
+          "thumb_url": "https://www.geogebra.org/resource/cu7awy74/0XtyP4eyN2mNOZD8/material-cu7awy74-thumb$1.png",
+          "chapter_id": "864490",
+          "chapter_title": "圆锥曲线的方程"
+        }
+      ]
+    },
+    {
+      "id": "864491",
+      "title": "数列",
+      "pages": [
+        {
+          "page_id": "jjx8qzdk",
+          "material_id": "aursjmcb",
+          "title": "谢尔宾斯基三角形",
+          "thumb_url": "https://www.geogebra.org/resource/aursjmcb/B2bqIh4JMBest7In/material-aursjmcb-thumb$1.png",
+          "chapter_id": "864491",
+          "chapter_title": "数列"
+        }
+      ]
+    },
+    {
+      "id": "864492",
+      "title": "一元函数的导数及其应用",
+      "pages": [
+        {
+          "page_id": "qu2ddmhg",
+          "material_id": "xteexs5e",
+          "title": "2021年新高考1卷第7题",
+          "thumb_url": "https://www.geogebra.org/resource/xteexs5e/ouXcVmexvFRon1aZ/material-xteexs5e-thumb.png",
+          "chapter_id": "864492",
+          "chapter_title": "一元函数的导数及其应用"
+        }
+      ]
+    }
+  ],
+  "page_count": 146
+}

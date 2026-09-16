@@ -979,7 +979,7 @@ def list_questions_by_knowledge(
     return {"codes": wanted, "match": mode, "questions": out[: max(1, min(limit, 400))]}
 
 
-def get_questions_by_ids(question_ids: list[str], *, limit: int = 80) -> list[dict[str, Any]]:
+def get_questions_by_ids(question_ids: list[str], *, limit: int = 300) -> list[dict[str, Any]]:
     """Load full question rows in the given id order (for practice preview/print)."""
     ids: list[str] = []
     seen: set[str] = set()
@@ -1108,3 +1108,106 @@ def set_question_knowledge_points(
         }
         for code in linked
     ]
+
+
+def _normalize_knowledge_codes(codes: list[str] | None) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in codes or []:
+        code = str(raw or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        out.append(code)
+    return out
+
+
+def list_animations_for_codes(codes: list[str] | None) -> list[dict[str, Any]]:
+    """Unique GeoGebra animations linked to any of the given knowledge codes."""
+    from word_math_md.geogebra_pep import serialize_animation
+
+    wanted = _normalize_knowledge_codes(codes)
+    if not wanted:
+        return []
+    client = _client()
+    res = (
+        client.table("knowledge_geogebra_animations")
+        .select(
+            "knowledge_code,book_id,page_id,material_id,title,chapter_title,"
+            "chapter_id,thumb_url,sort_order"
+        )
+        .in_("knowledge_code", wanted)
+        .order("sort_order")
+        .execute()
+    )
+    grouped: dict[str, dict[str, Any]] = {}
+    code_map: dict[str, list[str]] = {}
+    for row in res.data or []:
+        page_id = row.get("page_id") or ""
+        if not page_id:
+            continue
+        if page_id not in grouped:
+            grouped[page_id] = row
+            code_map[page_id] = []
+        code = row.get("knowledge_code") or ""
+        if code and code not in code_map[page_id]:
+            code_map[page_id].append(code)
+    return [
+        serialize_animation(grouped[page_id], code_map[page_id])
+        for page_id in grouped
+    ]
+
+
+def list_animations_for_question(question_id: str) -> list[dict[str, Any]]:
+    qid = (question_id or "").strip()
+    if not qid:
+        raise ValueError("无效的题目 id")
+    client = _client()
+    found = (
+        client.table("questions")
+        .select("id,knowledge_codes")
+        .eq("id", qid)
+        .limit(1)
+        .execute()
+    )
+    if not found.data:
+        raise ValueError("题目不存在")
+    codes = list(found.data[0].get("knowledge_codes") or [])
+    if not codes:
+        links = (
+            client.table("question_knowledge_points")
+            .select("knowledge_code")
+            .eq("question_id", qid)
+            .execute()
+        )
+        codes = [row.get("knowledge_code") or "" for row in (links.data or [])]
+    return list_animations_for_codes(codes)
+
+
+def sync_geogebra_pep_animations(*, live: bool = True) -> dict[str, Any]:
+    from word_math_md.geogebra_pep import BOOK_ID, mapped_rows
+
+    rows = mapped_rows(live=live)
+    client = _client()
+    existing = (
+        client.table("knowledge_points")
+        .select("code")
+        .in_("code", sorted({row["knowledge_code"] for row in rows}))
+        .execute()
+    )
+    have = {row["code"] for row in (existing.data or [])}
+    kept = [row for row in rows if row["knowledge_code"] in have]
+    skipped = len(rows) - len(kept)
+    client.table("knowledge_geogebra_animations").delete().eq("book_id", BOOK_ID).execute()
+    for start in range(0, len(kept), 40):
+        client.table("knowledge_geogebra_animations").insert(kept[start : start + 40]).execute()
+    pages = {row["page_id"] for row in kept}
+    codes = {row["knowledge_code"] for row in kept}
+    return {
+        "book_id": BOOK_ID,
+        "pages": len(pages),
+        "links": len(kept),
+        "knowledge_codes": len(codes),
+        "skipped_unknown_codes": skipped,
+        "live": live,
+    }

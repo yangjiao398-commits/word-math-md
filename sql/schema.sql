@@ -93,6 +93,27 @@ CREATE TABLE IF NOT EXISTS question_knowledge_points (
 
 CREATE INDEX IF NOT EXISTS qkp_knowledge ON question_knowledge_points (knowledge_code);
 
+CREATE TABLE IF NOT EXISTS knowledge_geogebra_animations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  knowledge_code TEXT NOT NULL REFERENCES knowledge_points(code) ON DELETE CASCADE,
+  book_id TEXT NOT NULL DEFAULT 'dyetmjzr',
+  page_id TEXT NOT NULL,
+  material_id TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  chapter_title TEXT NOT NULL DEFAULT '',
+  chapter_id TEXT NOT NULL DEFAULT '',
+  thumb_url TEXT NOT NULL DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (knowledge_code, book_id, page_id)
+);
+
+CREATE INDEX IF NOT EXISTS kga_knowledge ON knowledge_geogebra_animations (knowledge_code);
+CREATE INDEX IF NOT EXISTS kga_page ON knowledge_geogebra_animations (page_id);
+CREATE INDEX IF NOT EXISTS kga_book ON knowledge_geogebra_animations (book_id);
+
 CREATE TABLE IF NOT EXISTS question_options (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
@@ -123,5 +144,6 @@ ALTER TABLE assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_knowledge_points ENABLE ROW LEVEL SECURITY;
+ALTER TABLE knowledge_geogebra_animations ENABLE ROW LEVEL SECURITY;
 
 -- Backend uses the service role (bypasses RLS). Anon has no table access.

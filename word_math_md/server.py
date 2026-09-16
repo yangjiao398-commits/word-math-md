@@ -32,11 +32,14 @@ from word_math_md.exam_bank import (
     get_paper_questions,
     get_questions_by_ids,
     import_markdown_file,
+    list_animations_for_codes,
+    list_animations_for_question,
     list_knowledge_points,
     list_papers,
     list_questions_by_knowledge,
     questions_to_markdown,
     set_question_knowledge_points,
+    sync_geogebra_pep_animations,
     update_paper_meta,
 )
 from word_math_md.knowledge_catalog import (
@@ -1891,6 +1894,45 @@ class KnowledgeItemIn(BaseModel):
 class SetQuestionKnowledgeIn(BaseModel):
     codes: list[str] | None = None
     items: list[KnowledgeItemIn] = []
+
+
+@app.get("/api/exam-bank/geogebra/animations")
+def api_list_geogebra_animations(codes: str = "") -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    wanted = [part.strip() for part in (codes or "").split(",") if part.strip()]
+    try:
+        animations = list_animations_for_codes(wanted)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "codes": wanted, "animations": animations})
+
+
+@app.get("/api/exam-bank/questions/{question_id}/animations")
+def api_question_animations(question_id: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", question_id or ""):
+        raise HTTPException(400, "无效的题目 id")
+    try:
+        animations = list_animations_for_question(question_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "question_id": question_id, "animations": animations})
+
+
+@app.post("/api/exam-bank/geogebra/sync")
+def api_sync_geogebra_animations() -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        data = sync_geogebra_pep_animations(live=True)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    data["ok"] = True
+    return JSONResponse(data)
 
 
 @app.put("/api/exam-bank/questions/{question_id}/knowledge-points")
