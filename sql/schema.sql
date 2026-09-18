@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS papers (
   source_md TEXT,
   semester TEXT NOT NULL DEFAULT '',
   exam_type TEXT NOT NULL DEFAULT '',
+  province TEXT NOT NULL DEFAULT '',
+  gaokao_paper TEXT NOT NULL DEFAULT '',
   extra JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -33,6 +35,8 @@ CREATE TABLE IF NOT EXISTS papers (
 
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS semester TEXT NOT NULL DEFAULT '';
 ALTER TABLE papers ADD COLUMN IF NOT EXISTS exam_type TEXT NOT NULL DEFAULT '';
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS province TEXT NOT NULL DEFAULT '';
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS gaokao_paper TEXT NOT NULL DEFAULT '';
 ALTER TABLE papers DROP CONSTRAINT IF EXISTS papers_semester_check;
 ALTER TABLE papers ADD CONSTRAINT papers_semester_check
   CHECK (semester = '' OR semester IN (
@@ -41,6 +45,19 @@ ALTER TABLE papers ADD CONSTRAINT papers_semester_check
 ALTER TABLE papers DROP CONSTRAINT IF EXISTS papers_exam_type_check;
 ALTER TABLE papers ADD CONSTRAINT papers_exam_type_check
   CHECK (exam_type = '' OR exam_type IN ('月考','期中','期末'));
+ALTER TABLE papers DROP CONSTRAINT IF EXISTS papers_province_check;
+ALTER TABLE papers ADD CONSTRAINT papers_province_check
+  CHECK (province = '' OR province IN (
+    '北京','天津','河北','山西','内蒙古','辽宁','吉林','黑龙江',
+    '上海','江苏','浙江','安徽','福建','江西','山东','河南',
+    '湖北','湖南','广东','广西','海南','重庆','四川','贵州',
+    '云南','西藏','陕西','甘肃','青海','宁夏','新疆'
+  ));
+ALTER TABLE papers DROP CONSTRAINT IF EXISTS papers_gaokao_paper_check;
+ALTER TABLE papers ADD CONSTRAINT papers_gaokao_paper_check
+  CHECK (gaokao_paper = '' OR gaokao_paper IN ('全国A卷','全国B卷'));
+CREATE INDEX IF NOT EXISTS papers_province ON papers (province);
+CREATE INDEX IF NOT EXISTS papers_gaokao_paper ON papers (gaokao_paper);
 
 CREATE TABLE IF NOT EXISTS knowledge_points (
   code TEXT PRIMARY KEY,
@@ -137,6 +154,88 @@ CREATE TABLE IF NOT EXISTS assets (
 
 CREATE INDEX IF NOT EXISTS assets_sha1 ON assets (sha1);
 
+CREATE TABLE IF NOT EXISTS answer_sheets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  paper_id UUID NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+  student_name TEXT NOT NULL DEFAULT '',
+  ocr_engine TEXT NOT NULL DEFAULT '',
+  ocr_text TEXT NOT NULL DEFAULT '',
+  total_score NUMERIC(8,2) NOT NULL DEFAULT 0,
+  max_score NUMERIC(8,2) NOT NULL DEFAULT 0,
+  correct_count INT NOT NULL DEFAULT 0,
+  question_count INT NOT NULL DEFAULT 0,
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS answer_sheets_paper ON answer_sheets (paper_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS answer_sheet_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sheet_id UUID NOT NULL REFERENCES answer_sheets(id) ON DELETE CASCADE,
+  question_id UUID REFERENCES questions(id) ON DELETE SET NULL,
+  question_no INT NOT NULL,
+  type_code TEXT NOT NULL DEFAULT '',
+  student_answer TEXT NOT NULL DEFAULT '',
+  expected_answer TEXT NOT NULL DEFAULT '',
+  is_correct BOOLEAN NOT NULL DEFAULT false,
+  status TEXT NOT NULL DEFAULT 'graded',
+  score NUMERIC(8,2) NOT NULL DEFAULT 0,
+  max_score NUMERIC(8,2) NOT NULL DEFAULT 0,
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS answer_sheet_items_sheet ON answer_sheet_items (sheet_id, question_no);
+
+CREATE TABLE IF NOT EXISTS app_users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone TEXT NOT NULL UNIQUE,
+  nickname TEXT NOT NULL DEFAULT '',
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS app_memberships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL DEFAULT 'trial',
+  status TEXT NOT NULL DEFAULT 'active',
+  expires_at TIMESTAMPTZ,
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS app_memberships_user ON app_memberships (user_id, expires_at DESC);
+
+CREATE TABLE IF NOT EXISTS app_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,
+  vendor TEXT NOT NULL DEFAULT '',
+  push_token TEXT NOT NULL,
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS app_devices_user ON app_devices (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS app_devices_token ON app_devices (user_id, push_token);
+
+CREATE TABLE IF NOT EXISTS app_orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL,
+  amount_fen INT NOT NULL DEFAULT 0,
+  channel TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'created',
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  paid_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS app_orders_user ON app_orders (user_id, created_at DESC);
+
 ALTER TABLE papers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_options ENABLE ROW LEVEL SECURITY;
@@ -145,5 +244,11 @@ ALTER TABLE question_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_knowledge_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_geogebra_animations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE answer_sheets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE answer_sheet_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_orders ENABLE ROW LEVEL SECURITY;
 
 -- Backend uses the service role (bypasses RLS). Anon has no table access.

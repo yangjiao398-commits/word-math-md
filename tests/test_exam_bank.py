@@ -2,11 +2,15 @@ import re
 
 from word_math_md.exam_bank import (
     PAPER_EXAM_TYPES,
+    PAPER_GAOKAO_PAPERS,
+    PAPER_PROVINCES,
     PAPER_SEMESTERS,
     _storage_prefix,
     extract_options,
     guess_type,
+    normalize_gaokao_paper,
     normalize_paper_exam_type,
+    normalize_paper_province,
     normalize_paper_semester,
     parse_knowledge_points,
     parse_markdown_paper,
@@ -59,6 +63,24 @@ def test_paper_meta_allowed_values():
         pass
     assert len(PAPER_SEMESTERS) == 6
     assert PAPER_EXAM_TYPES == ("月考", "期中", "期末")
+    assert normalize_paper_province("广东省") == "广东"
+    assert normalize_paper_province("内蒙古自治区") == "内蒙古"
+    assert normalize_paper_province("") == ""
+    assert normalize_gaokao_paper("全国甲卷") == "全国A卷"
+    assert normalize_gaokao_paper("乙卷") == "全国B卷"
+    assert normalize_gaokao_paper("  ") == ""
+    try:
+        normalize_paper_province("加州")
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+    try:
+        normalize_gaokao_paper("新高考I卷")
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+    assert len(PAPER_PROVINCES) == 31
+    assert PAPER_GAOKAO_PAPERS == ("全国A卷", "全国B卷")
 
 
 def test_parse_questions_in_order():

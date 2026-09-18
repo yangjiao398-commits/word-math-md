@@ -11,9 +11,10 @@ from pathlib import Path
 from urllib.parse import quote
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -27,21 +28,29 @@ from word_math_md.inspect import inspect_docx
 from word_math_md.ole_to_latex import convert_ole_docx, format_formula_list
 from word_math_md.exam_bank import (
     PAPER_EXAM_TYPES,
+    PAPER_GAOKAO_PAPERS,
+    PAPER_PROVINCES,
     PAPER_SEMESTERS,
     exam_bank_configured,
+    get_answer_sheet,
     get_paper_questions,
     get_questions_by_ids,
     import_markdown_file,
     list_animations_for_codes,
     list_animations_for_question,
+    list_answer_sheets,
     list_knowledge_points,
     list_papers,
     list_questions_by_knowledge,
+    paper_filter_options,
     questions_to_markdown,
+    save_answer_sheet,
     set_question_knowledge_points,
     sync_geogebra_pep_animations,
     update_paper_meta,
 )
+from word_math_md.sheet_grade import grade_paper
+from word_math_md.sheet_ocr import ocr_configured, ocr_images
 from word_math_md.knowledge_catalog import (
     bulk_upsert_catalog,
     create_catalog_item,
@@ -52,6 +61,29 @@ from word_math_md.knowledge_catalog import (
 )
 from word_math_md.knowledge_page import page_html as knowledge_page_html
 from word_math_md.practice_page import page_html as practice_page_html
+from word_math_md.app_api import (
+    app_runtime_config,
+    decode_token,
+    load_user,
+    login_with_sms,
+    public_user,
+    register_device,
+    rewrite_preview_payload,
+    send_sms_code,
+    slim_papers,
+)
+from word_math_md.paper_pdf import html_to_pdf_bytes, paper_stem_html, pdf_filename
+from word_math_md.app_pay import (
+    create_order,
+    fulfill_order,
+    handle_alipay_notify,
+    handle_wechat_notify,
+    load_order,
+    mock_page_html,
+    mock_result_html,
+    public_order,
+    verify_mock_token,
+)
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -77,8 +109,76 @@ WORK.mkdir(parents=True, exist_ok=True)
 PREVIEWS = WORK / "previews"
 PREVIEWS.mkdir(parents=True, exist_ok=True)
 
-# job_id -> absolute directory containing .md + assets/
-_PREVIEW_ROOTS: dict[str, Path] = {}
+_bearer = HTTPBearer(auto_error=False)
+
+
+def _app_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> dict:
+    if not creds or not creds.credentials:
+        raise HTTPException(401, "请先登录")
+    try:
+        payload = decode_token(creds.credentials)
+        return load_user(str(payload.get("sub") or ""))
+    except ValueError as exc:
+        raise HTTPException(401, str(exc)) from exc
+
+
+def _require_member(user: dict) -> dict:
+    from word_math_md.app_api import get_membership
+
+    member = get_membership(user["id"])
+    if not member.get("entitled"):
+        raise HTTPException(402, "需要有效会员才能使用该内容")
+    user["membership"] = member
+    return user
+
+
+def build_paper_preview(paper_id: str) -> dict:
+    raw = get_paper_questions(paper_id)
+    paper = raw.get("paper") or {}
+    source = (paper.get("source_md") or "").strip()
+    if not source:
+        source = questions_to_markdown(raw.get("questions") or [])
+    if not source.strip():
+        raise HTTPException(404, "该试卷没有可显示的内容。")
+    dest = WORK / "preview-bank" / paper_id
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    src = dest / "paper.md"
+    src.write_text(source, encoding="utf-8")
+    data = parse_markdown_like_gaokao(src)
+    data["ok"] = True
+    data["paper"] = {
+        "id": paper.get("id"),
+        "paper_code": paper.get("paper_code"),
+        "title": paper.get("title"),
+        "source_filename": paper.get("source_filename"),
+        "semester": paper.get("semester") or "",
+        "exam_type": paper.get("exam_type") or "",
+        "province": paper.get("province") or "",
+        "gaokao_paper": paper.get("gaokao_paper") or "",
+    }
+    data["file_name"] = paper.get("source_filename") or paper.get("title")
+    by_no = {}
+    for row in raw.get("questions") or []:
+        try:
+            by_no[int(row.get("question_no"))] = row
+        except (TypeError, ValueError):
+            continue
+    for item in data.get("questions") or []:
+        try:
+            dbq = by_no.get(int(item.get("index")))
+        except (TypeError, ValueError):
+            dbq = None
+        if not dbq:
+            continue
+        item["question_id"] = dbq.get("id")
+        item["type_code"] = dbq.get("type_code") or ""
+        item["knowledge_points"] = dbq.get("knowledge_points") or []
+        item["knowledge_codes"] = dbq.get("knowledge_codes") or []
+    return data
 
 
 class Health(BaseModel):
@@ -366,6 +466,16 @@ def index() -> str:
       font-size: 0.82rem; font-weight: 600; cursor: pointer;
       background: #243140;
     }}
+    .paper-filter-bar {{
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center;
+    }}
+    .paper-filter-bar select {{
+      width: auto; min-width: 10em; margin: 0;
+    }}
+    button.paper-action-btn {{
+      width: auto; min-width: 0; margin: 0; padding: 6px 12px;
+      font-size: 0.82rem; font-weight: 600; background: #243140;
+    }}
     button.linkish {{
       width: auto; display: inline-block; padding: 8px 14px; margin-bottom: 10px;
       font-size: 0.85rem;
@@ -424,6 +534,42 @@ def index() -> str:
     .kp-actions {{ display: flex; gap: 8px; justify-content: flex-end; align-items: center; }}
     .kp-actions a {{ color: var(--accent); margin-right: auto; font-size: 0.85rem; }}
     .kp-actions button {{ width: auto; padding: 8px 16px; font-size: 0.9rem; }}
+    #sheetDialog {{
+      position: fixed; inset: 0; z-index: 32;
+      display: flex; align-items: center; justify-content: center;
+    }}
+    #sheetDialog[hidden] {{ display: none; }}
+    .sheet-panel {{
+      position: relative; width: min(920px, 96vw); max-height: 90vh;
+      display: flex; flex-direction: column;
+      background: #1a222c; border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 14px;
+    }}
+    .sheet-panel h3 {{ margin: 0 0 8px; font-size: 1.05rem; }}
+    .sheet-fields {{
+      display: grid; grid-template-columns: 1fr auto; gap: 8px; margin: 8px 0 10px; align-items: end;
+    }}
+    @media (max-width: 700px) {{ .sheet-fields {{ grid-template-columns: 1fr; }} }}
+    .sheet-fields label {{ margin: 0; }}
+    .sheet-thumbs {{
+      display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; max-height: 18vh; overflow: auto;
+    }}
+    .sheet-thumbs img {{
+      width: 92px; height: 92px; object-fit: cover; border-radius: 8px;
+      border: 1px solid var(--line); background: #fff;
+    }}
+    .sheet-body {{ overflow: auto; max-height: 48vh; margin-bottom: 10px; }}
+    .sheet-score {{ font-size: 1.15rem; font-weight: 700; margin: 0 0 8px; }}
+    .sheet-ok {{ color: #7dcea0; }}
+    .sheet-bad {{ color: #e07a7a; }}
+    .sheet-warn {{ color: #f0c674; }}
+    table.sheet-table {{ width: 100%; border-collapse: collapse; font-size: 0.86rem; }}
+    table.sheet-table th, table.sheet-table td {{
+      border-bottom: 1px solid var(--line); padding: 7px 6px; text-align: left; vertical-align: top;
+    }}
+    table.sheet-table input {{
+      margin: 0; padding: 6px 8px; font-size: 0.85rem;
+    }}
+    .sheet-history {{ color: var(--muted); font-size: 0.82rem; margin: 0 0 8px; }}
     .q-meta {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
     .chip {{
       display: inline-block; padding: 2px 8px; border-radius: 999px;
@@ -463,6 +609,7 @@ def index() -> str:
       body.viewing-paper .no-print,
       body.viewing-paper .kp-row,
       body.viewing-paper #kpDialog,
+      body.viewing-paper #sheetDialog,
       body.viewing-paper #vsDialog,
       body.viewing-paper #result,
       body.viewing-paper .q-meta,
@@ -550,6 +697,16 @@ def index() -> str:
       <input type="text" id="paperCode" placeholder="如 SZ-G1-2024-QM-01" />
       <label>试卷名称</label>
       <input type="text" id="paperTitle" placeholder="如 2024学年高一上学期期末数学" />
+      <div class="row">
+        <div>
+          <label>所在省份</label>
+          <select id="paperProvince"></select>
+        </div>
+        <div>
+          <label>高考试卷</label>
+          <select id="paperGaokao"></select>
+        </div>
+      </div>
       <div class="btn-row">
         <button type="button" class="secondary" id="btnImportMd">导入 Markdown 到题库</button>
         <button type="button" class="secondary" id="btnListPapers">查看已入库试卷</button>
@@ -590,6 +747,28 @@ def index() -> str:
         </div>
       </div>
     </div>
+    <input type="file" id="sheetFiles" accept="image/jpeg,image/png,image/webp,image/bmp,.jpg,.jpeg,.png,.webp,.bmp" multiple hidden />
+    <div id="sheetDialog" hidden>
+      <div class="kp-backdrop" id="sheetBackdrop"></div>
+      <div class="sheet-panel" role="dialog" aria-labelledby="sheetTitle">
+        <h3 id="sheetTitle">上传答卷评分</h3>
+        <p class="summary" id="sheetHint">拍摄做完的试卷照片，系统会 OCR 识别答案并与题库标准答案比对。</p>
+        <div class="sheet-fields">
+          <label>学生姓名（可空）
+            <input type="text" id="sheetStudent" placeholder="如 张三" />
+          </label>
+          <button type="button" class="secondary" id="sheetPick">选择照片</button>
+        </div>
+        <div class="sheet-thumbs" id="sheetThumbs"></div>
+        <p class="sheet-history" id="sheetHistory"></p>
+        <div class="sheet-body" id="sheetResult"></div>
+        <div class="kp-actions">
+          <button type="button" class="secondary" id="sheetClose">关闭</button>
+          <button type="button" class="secondary" id="sheetRegrade" hidden>按修改重评</button>
+          <button type="button" id="sheetGrade">识别并评分</button>
+        </div>
+      </div>
+    </div>
     <div id="kpDialog" hidden>
       <div class="kp-backdrop" id="kpBackdrop"></div>
       <div class="kp-panel" role="dialog" aria-labelledby="kpTitle">
@@ -609,7 +788,7 @@ def index() -> str:
         </div>
       </div>
     </div>
-    <footer class="no-print">API: POST /api/convert · POST /api/parse-markdown · POST /api/exam-bank/import-markdown · GET /api/exam-bank/papers · GET /api/exam-bank/knowledge-points · v{__version__}</footer>
+    <footer class="no-print">API: POST /api/convert · POST /api/exam-bank/import-markdown · GET /api/exam-bank/papers · POST /api/exam-bank/papers/&#123;id&#125;/grade-sheet · v{__version__}</footer>
   </main>
   <script>
     const f = document.getElementById('f');
@@ -635,6 +814,17 @@ def index() -> str:
     }}
     const PAPER_SEMESTERS = {json.dumps(list(PAPER_SEMESTERS), ensure_ascii=False)};
     const PAPER_EXAM_TYPES = {json.dumps(list(PAPER_EXAM_TYPES), ensure_ascii=False)};
+    const PAPER_PROVINCES = {json.dumps(list(PAPER_PROVINCES), ensure_ascii=False)};
+    const PAPER_GAOKAO_PAPERS = {json.dumps(list(PAPER_GAOKAO_PAPERS), ensure_ascii=False)};
+    const PAPER_META_LABELS = {{semester:'学期', exam_type:'考试类型', province:'省份', gaokao_paper:'高考试卷'}};
+    function fillNamedSelect(el, values, placeholder, current) {{
+      if (!el) return;
+      el.innerHTML = '<option value="">' + esc(placeholder) + '</option>' +
+        values.map(v => '<option value="' + esc(v) + '"' +
+          (v === current ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+    }}
+    fillNamedSelect(document.getElementById('paperProvince'), PAPER_PROVINCES, '选择省份（可空）', '');
+    fillNamedSelect(document.getElementById('paperGaokao'), PAPER_GAOKAO_PAPERS, '全国A卷 / 全国B卷（可空）', '');
     function paperMetaSelect(paperId, field, values, current, placeholder) {{
       return '<select class="paper-meta-btn" data-paper-meta data-paper-id="' + esc(paperId) +
         '" data-field="' + esc(field) + '">' +
@@ -906,6 +1096,9 @@ def index() -> str:
         html += '<div class="paper-preview-bar no-print" id="paperPreviewBar">' +
           '<button type="button" class="secondary" id="btnBackPapers">返回试卷列表</button>' +
           '<button type="button" id="btnPrintPaper">打印试卷</button>' +
+          '<button type="button" class="secondary" id="btnUploadSheetPreview" data-upload-sheet data-paper-id="' +
+          esc(paper.id || '') + '" data-paper-title="' + esc(paper.title || paper.paper_code || '') +
+          '">上传答卷评分</button>' +
           '</div>';
         html += '<div class="print-paper-title no-print">' + heading + '</div>';
         html += '<h1 class="print-exam-title">' + esc(examPrintTitle(paper)) + '</h1>';
@@ -1000,6 +1193,8 @@ def index() -> str:
       const title = document.getElementById('paperTitle').value.trim();
       if (code) fd.append('paper_code', code);
       if (title) fd.append('paper_title', title);
+      fd.append('province', document.getElementById('paperProvince').value.trim());
+      fd.append('gaokao_paper', document.getElementById('paperGaokao').value.trim());
       try {{
         const res = await fetch('/api/exam-bank/import-markdown', {{ method: 'POST', body: fd }});
         const data = await readJson(res);
@@ -1037,36 +1232,55 @@ def index() -> str:
         await runImportMarkdown(importMdFile.files[0]);
       }}
     }});
-    btnListPapers.addEventListener('click', async () => {{
+    async function listBankPapers() {{
       document.body.classList.remove('viewing-paper');
       result.classList.remove('paper-view');
       btnListPapers.disabled = true;
+      const province = (document.getElementById('paperListProvince') || {{}}).value || '';
+      const gaokao = (document.getElementById('paperListGaokao') || {{}}).value || '';
+      const qs = [];
+      if (province) qs.push('province=' + encodeURIComponent(province));
+      if (gaokao) qs.push('gaokao_paper=' + encodeURIComponent(gaokao));
       try {{
-        const res = await fetch('/api/exam-bank/papers');
+        const res = await fetch('/api/exam-bank/papers' + (qs.length ? '?' + qs.join('&') : ''));
         const data = await readJson(res);
         if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
         const rows = data.papers || [];
         result.textContent = '题库中共 ' + rows.length + ' 套试卷。';
-        questions.innerHTML = rows.map(p =>
+        const filterBar = '<div class="paper-filter-bar">' +
+          '<select id="paperListProvince"></select>' +
+          '<select id="paperListGaokao"></select>' +
+          '</div>';
+        questions.innerHTML = filterBar + (rows.map(p =>
           '<article class="q-card paper-card">' +
           '<div class="q-meta">' +
           '<span class="chip">' + esc(p.paper_code) + '</span>' +
           '<span class="chip">题目 ' + esc(p.question_count) + '</span>' +
+          (p.province ? '<span class="chip">' + esc(p.province) + '</span>' : '') +
+          (p.gaokao_paper ? '<span class="chip">' + esc(p.gaokao_paper) + '</span>' : '') +
           '<span class="chip">点击名称查看</span></div>' +
           '<div class="paper-head">' +
           '<div class="paper-title rich-content" data-paper-id="' + esc(p.id) +
           '" role="button" tabindex="0">' + esc(p.title) + '</div>' +
           paperMetaSelect(p.id, 'semester', PAPER_SEMESTERS, p.semester || '', '选择学期') +
           paperMetaSelect(p.id, 'exam_type', PAPER_EXAM_TYPES, p.exam_type || '', '选择考试类型') +
+          paperMetaSelect(p.id, 'province', PAPER_PROVINCES, p.province || '', '选择省份') +
+          paperMetaSelect(p.id, 'gaokao_paper', PAPER_GAOKAO_PAPERS, p.gaokao_paper || '', '全国A/B卷') +
+          '<button type="button" class="paper-action-btn" data-upload-sheet data-paper-id="' +
+          esc(p.id) + '" data-paper-title="' + esc(p.title || p.paper_code || '') +
+          '">上传答卷</button>' +
           '</div></article>'
-        ).join('') || '<p>题库还是空的。</p>';
+        ).join('') || '<p>题库还是空的。</p>');
+        fillNamedSelect(document.getElementById('paperListProvince'), PAPER_PROVINCES, '全部省份', province);
+        fillNamedSelect(document.getElementById('paperListGaokao'), PAPER_GAOKAO_PAPERS, '全部全国卷', gaokao);
         questions.hidden = false;
       }} catch (err) {{
         result.textContent = '读取题库失败: ' + err.message;
       }} finally {{
         btnListPapers.disabled = false;
       }}
-    }});
+    }}
+    btnListPapers.addEventListener('click', () => listBankPapers());
     async function openBankPaper(paperId) {{
       btnListPapers.disabled = true;
       analysis.innerHTML = '';
@@ -1111,6 +1325,16 @@ def index() -> str:
         btnListPapers.click();
         return;
       }}
+      const uploadBtn = ev.target.closest('[data-upload-sheet]');
+      if (uploadBtn && questions.contains(uploadBtn)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        openSheetDialog(
+          uploadBtn.getAttribute('data-paper-id'),
+          uploadBtn.getAttribute('data-paper-title') || ''
+        );
+        return;
+      }}
       const vsBtn = ev.target.closest('[data-vs-index]');
       if (vsBtn && questions.contains(vsBtn)) {{
         ev.preventDefault();
@@ -1141,6 +1365,11 @@ def index() -> str:
       openBankPaper(title.getAttribute('data-paper-id'));
     }});
     questions.addEventListener('change', async (ev) => {{
+      const listFilter = ev.target.closest('#paperListProvince, #paperListGaokao');
+      if (listFilter && questions.contains(listFilter)) {{
+        listBankPapers();
+        return;
+      }}
       const sel = ev.target.closest('select[data-paper-meta]');
       if (!sel || !questions.contains(sel)) return;
       const paperId = sel.getAttribute('data-paper-id');
@@ -1157,7 +1386,7 @@ def index() -> str:
         }});
         const data = await readJson(res);
         if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
-        const label = field === 'semester' ? '学期' : '考试类型';
+        const label = PAPER_META_LABELS[field] || '试卷属性';
         result.textContent = '已保存' + label + '：' + (value || '未选');
       }} catch (err) {{
         result.textContent = '保存试卷属性失败: ' + err.message;
@@ -1284,6 +1513,178 @@ def index() -> str:
         closeKpDialog();
       }} catch (err) {{
         document.getElementById('kpHint').textContent = '保存失败: ' + err.message;
+      }} finally {{
+        btn.disabled = false;
+      }}
+    }});
+    const sheetDialog = document.getElementById('sheetDialog');
+    const sheetFiles = document.getElementById('sheetFiles');
+    const sheetThumbs = document.getElementById('sheetThumbs');
+    const sheetResult = document.getElementById('sheetResult');
+    const sheetHistory = document.getElementById('sheetHistory');
+    let sheetPaperId = '';
+    let sheetPaperTitle = '';
+    let sheetObjectUrls = [];
+    function statusLabel(st) {{
+      if (st === 'missing') return '未识别';
+      if (st === 'needs_review') return '待复核';
+      return '已评分';
+    }}
+    function closeSheetDialog() {{
+      sheetDialog.hidden = true;
+      sheetPaperId = '';
+      sheetFiles.value = '';
+      sheetObjectUrls.forEach(u => URL.revokeObjectURL(u));
+      sheetObjectUrls = [];
+      sheetThumbs.innerHTML = '';
+    }}
+    function renderSheetThumbs() {{
+      sheetObjectUrls.forEach(u => URL.revokeObjectURL(u));
+      sheetObjectUrls = [];
+      const files = Array.from(sheetFiles.files || []);
+      sheetThumbs.innerHTML = files.map(file => {{
+        const url = URL.createObjectURL(file);
+        sheetObjectUrls.push(url);
+        return '<img src="' + url + '" alt="' + esc(file.name) + '" />';
+      }}).join('');
+    }}
+    function renderSheetReport(data) {{
+      const items = data.items || [];
+      const engine = data.ocr_engine ? '识别引擎 ' + data.ocr_engine + '。' : '';
+      let html = '<p class="sheet-score">得分 ' + esc(data.total_score) +
+        ' / ' + esc(data.max_score) +
+        ' · 对 ' + esc(data.correct_count) +
+        ' / ' + esc(data.question_count) +
+        ' 题</p>';
+      html += '<p class="summary">' + engine +
+        '已识别 ' + esc(data.recognized_count) +
+        ' 题。未识别 ' + esc(data.missing_count) +
+        ' 题，待复核 ' + esc(data.needs_review_count) +
+        ' 题。可改识别结果后点「按修改重评」。</p>';
+      html += '<table class="sheet-table"><thead><tr>' +
+        '<th>题</th><th>题型</th><th>识别答案</th><th>标准答案</th><th>结果</th><th>分</th>' +
+        '</tr></thead><tbody>';
+      html += items.map(item => {{
+        const cls = item.is_correct ? 'sheet-ok' : (item.status === 'needs_review' ? 'sheet-warn' : 'sheet-bad');
+        return '<tr><td>' + esc(item.question_no) + '</td><td>' + esc(item.type_label || item.type_code) +
+          '</td><td><input data-sheet-no="' + esc(item.question_no) + '" value="' +
+          esc(item.student_answer || '') + '" /></td><td>' + esc(item.expected_answer || '') +
+          '</td><td class="' + cls + '">' + (item.is_correct ? '正确' : '错误') +
+          ' · ' + statusLabel(item.status) + '</td><td>' +
+          esc(item.score) + '/' + esc(item.max_score) + '</td></tr>';
+      }}).join('');
+      html += '</tbody></table>';
+      if (data.ocr_text) {{
+        html += '<details><summary>OCR 原文</summary><pre>' + esc(data.ocr_text).slice(0, 4000) + '</pre></details>';
+      }}
+      sheetResult.innerHTML = html;
+      document.getElementById('sheetRegrade').hidden = !items.length;
+    }}
+    async function loadSheetHistory() {{
+      if (!sheetPaperId) return;
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(sheetPaperId) + '/answer-sheets');
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const rows = data.sheets || [];
+        if (!rows.length) {{
+          sheetHistory.textContent = '本题还没有评分记录。';
+          return;
+        }}
+        sheetHistory.innerHTML = '最近评分：' + rows.slice(0, 5).map(row => {{
+          const who = row.student_name || '未署名';
+          const when = String(row.created_at || '').replace('T', ' ').slice(0, 16);
+          return esc(who) + ' ' + esc(row.total_score) + '/' + esc(row.max_score) +
+            (when ? ' · ' + esc(when) : '');
+        }}).join('；');
+      }} catch (err) {{
+        sheetHistory.textContent = '暂无法读取评分记录。';
+      }}
+    }}
+    async function openSheetDialog(paperId, title) {{
+      sheetPaperId = paperId || '';
+      sheetPaperTitle = title || '';
+      if (!sheetPaperId) return;
+      document.getElementById('sheetTitle').textContent = '上传答卷评分 · ' + (sheetPaperTitle || '试卷');
+      document.getElementById('sheetStudent').value = '';
+      sheetFiles.value = '';
+      sheetResult.innerHTML = '';
+      document.getElementById('sheetRegrade').hidden = true;
+      renderSheetThumbs();
+      sheetDialog.hidden = false;
+      try {{
+        const res = await fetch('/api/exam-bank/ocr-status');
+        const data = await readJson(res);
+        const engines = (data.engines || []).join('、') || '未安装';
+        document.getElementById('sheetHint').textContent =
+          data.configured
+            ? ('拍摄做完的试卷照片（可多张）。OCR：' + engines + '。识别后与题库标准答案比对打分。')
+            : '尚未安装 OCR。请安装 rapidocr-onnxruntime，或在 .env 配置 DASHSCOPE_API_KEY / OPENAI_API_KEY。';
+      }} catch (err) {{
+        document.getElementById('sheetHint').textContent = '无法检查 OCR 状态。';
+      }}
+      await loadSheetHistory();
+    }}
+    document.getElementById('sheetBackdrop').addEventListener('click', closeSheetDialog);
+    document.getElementById('sheetClose').addEventListener('click', closeSheetDialog);
+    document.getElementById('sheetPick').addEventListener('click', () => sheetFiles.click());
+    sheetFiles.addEventListener('change', renderSheetThumbs);
+    document.getElementById('sheetGrade').addEventListener('click', async () => {{
+      if (!sheetPaperId) return;
+      const files = Array.from(sheetFiles.files || []);
+      if (!files.length) {{
+        document.getElementById('sheetHint').textContent = '请先选择一张或多张答卷照片。';
+        return;
+      }}
+      const btn = document.getElementById('sheetGrade');
+      btn.disabled = true;
+      document.getElementById('sheetHint').textContent = '正在识别照片并评分…';
+      const fd = new FormData();
+      const name = document.getElementById('sheetStudent').value.trim();
+      if (name) fd.append('student_name', name);
+      files.forEach(file => fd.append('files', file));
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(sheetPaperId) + '/grade-sheet', {{
+          method: 'POST',
+          body: fd,
+        }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        document.getElementById('sheetHint').textContent = data.persist_error
+          ? ('已评分，但保存记录失败：' + data.persist_error)
+          : '评分完成。';
+        renderSheetReport(data);
+        await loadSheetHistory();
+      }} catch (err) {{
+        document.getElementById('sheetHint').textContent = '评分失败: ' + err.message;
+      }} finally {{
+        btn.disabled = false;
+      }}
+    }});
+    document.getElementById('sheetRegrade').addEventListener('click', async () => {{
+      if (!sheetPaperId) return;
+      const answers = Array.from(document.querySelectorAll('[data-sheet-no]')).map(el => ({{
+        no: Number(el.getAttribute('data-sheet-no')),
+        answer: el.value,
+      }}));
+      const btn = document.getElementById('sheetRegrade');
+      btn.disabled = true;
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(sheetPaperId) + '/regrade-sheet', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            student_name: document.getElementById('sheetStudent').value.trim(),
+            answers,
+          }}),
+        }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        document.getElementById('sheetHint').textContent = '已按修改后的答案重新评分。';
+        renderSheetReport(data);
+        await loadSheetHistory();
+      }} catch (err) {{
+        document.getElementById('sheetHint').textContent = '重评失败: ' + err.message;
       }} finally {{
         btn.disabled = false;
       }}
@@ -1526,6 +1927,8 @@ async def api_import_markdown(
     file: UploadFile = File(...),
     paper_code: str | None = Form(None),
     paper_title: str | None = Form(None),
+    province: str | None = Form(None),
+    gaokao_paper: str | None = Form(None),
 ) -> JSONResponse:
     if not exam_bank_configured():
         raise HTTPException(
@@ -1543,7 +1946,13 @@ async def api_import_markdown(
     src = dest / Path(name).name
     src.write_bytes(await file.read())
     try:
-        data = import_markdown_file(src, paper_code=paper_code, title=paper_title)
+        data = import_markdown_file(
+            src,
+            paper_code=paper_code,
+            title=paper_title,
+            province=province,
+            gaokao_paper=gaokao_paper,
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
@@ -1554,19 +1963,28 @@ async def api_import_markdown(
 
 
 @app.get("/api/exam-bank/papers")
-def api_list_papers() -> JSONResponse:
+def api_list_papers(
+    province: str | None = None,
+    gaokao_paper: str | None = None,
+) -> JSONResponse:
     if not exam_bank_configured():
         raise HTTPException(503, "未配置 Supabase 题库。")
     try:
-        papers = list_papers()
+        papers = list_papers(province=province, gaokao_paper=gaokao_paper)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
-    return JSONResponse({"ok": True, "papers": papers})
+    return JSONResponse(
+        {"ok": True, "papers": papers, "filters": paper_filter_options()}
+    )
 
 
 class PaperMetaIn(BaseModel):
     semester: str | None = None
     exam_type: str | None = None
+    province: str | None = None
+    gaokao_paper: str | None = None
 
 
 @app.patch("/api/exam-bank/papers/{paper_id}")
@@ -1580,6 +1998,8 @@ def api_update_paper_meta(paper_id: str, body: PaperMetaIn) -> JSONResponse:
             paper_id,
             semester=body.semester,
             exam_type=body.exam_type,
+            province=body.province,
+            gaokao_paper=body.gaokao_paper,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -1838,52 +2258,169 @@ def api_paper_preview(paper_id: str) -> JSONResponse:
     if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
         raise HTTPException(400, "无效的试卷 id")
     try:
-        raw = get_paper_questions(paper_id)
-        paper = raw.get("paper") or {}
-        source = (paper.get("source_md") or "").strip()
-        if not source:
-            source = questions_to_markdown(raw.get("questions") or [])
-        if not source.strip():
-            raise HTTPException(404, "该试卷没有可显示的内容。")
-        dest = WORK / "preview-bank" / paper_id
-        if dest.exists():
-            shutil.rmtree(dest, ignore_errors=True)
-        dest.mkdir(parents=True, exist_ok=True)
-        src = dest / "paper.md"
-        src.write_text(source, encoding="utf-8")
-        data = parse_markdown_like_gaokao(src)
+        data = build_paper_preview(paper_id)
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
-    data["ok"] = True
-    data["paper"] = {
-        "id": paper.get("id"),
-        "paper_code": paper.get("paper_code"),
-        "title": paper.get("title"),
-        "source_filename": paper.get("source_filename"),
-        "semester": paper.get("semester") or "",
-        "exam_type": paper.get("exam_type") or "",
-    }
-    data["file_name"] = paper.get("source_filename") or paper.get("title")
-    by_no = {}
-    for row in raw.get("questions") or []:
-        try:
-            by_no[int(row.get("question_no"))] = row
-        except (TypeError, ValueError):
-            continue
-    for item in data.get("questions") or []:
-        try:
-            dbq = by_no.get(int(item.get("index")))
-        except (TypeError, ValueError):
-            dbq = None
-        if not dbq:
-            continue
-        item["question_id"] = dbq.get("id")
-        item["type_code"] = dbq.get("type_code") or ""
-        item["knowledge_points"] = dbq.get("knowledge_points") or []
-        item["knowledge_codes"] = dbq.get("knowledge_codes") or []
     return JSONResponse(data)
+
+
+class SheetAnswerIn(BaseModel):
+    no: int
+    answer: str = ""
+
+
+class RegradeSheetIn(BaseModel):
+    student_name: str = ""
+    answers: list[SheetAnswerIn] = []
+
+
+def _grade_report_payload(
+    report: dict,
+    *,
+    ocr_engine: str = "",
+    ocr_text: str = "",
+    persist_error: str = "",
+    sheet_id: str = "",
+) -> dict:
+    payload = {
+        "ok": True,
+        "ocr_engine": ocr_engine,
+        "ocr_text": ocr_text,
+        "persist_error": persist_error,
+        "sheet_id": sheet_id,
+        **report,
+    }
+    return payload
+
+
+def _persist_sheet(paper_id: str, report: dict, student_name: str, ocr_engine: str, ocr_text: str):
+    try:
+        saved = save_answer_sheet(
+            paper_id,
+            report,
+            student_name=student_name,
+            ocr_engine=ocr_engine,
+            ocr_text=ocr_text,
+        )
+        return saved.get("id") or "", ""
+    except Exception as exc:
+        return "", str(exc)
+
+
+@app.get("/api/exam-bank/ocr-status")
+def api_ocr_status() -> JSONResponse:
+    data = ocr_configured()
+    data["ok"] = True
+    return JSONResponse(data)
+
+
+@app.get("/api/exam-bank/papers/{paper_id}/answer-sheets")
+def api_list_answer_sheets(paper_id: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        sheets = list_answer_sheets(paper_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "sheets": sheets})
+
+
+@app.get("/api/exam-bank/answer-sheets/{sheet_id}")
+def api_get_answer_sheet(sheet_id: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        data = get_answer_sheet(sheet_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    data["ok"] = True
+    return JSONResponse(data)
+
+
+@app.post("/api/exam-bank/papers/{paper_id}/grade-sheet")
+async def api_grade_sheet(
+    paper_id: str,
+    files: list[UploadFile] = File(default=[]),
+    student_name: str = Form(""),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise HTTPException(400, "无效的试卷 id")
+    images: list[tuple[bytes, str]] = []
+    for item in files:
+        raw = await item.read()
+        if not raw:
+            continue
+        images.append((raw, item.content_type or ""))
+    if not images:
+        raise HTTPException(400, "请至少上传一张答卷照片。")
+    try:
+        paper = get_paper_questions(paper_id)
+        ocr = ocr_images(images)
+        report = grade_paper(paper.get("questions") or [], ocr.get("answers_by_no") or {})
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    sheet_id, persist_error = _persist_sheet(
+        paper_id,
+        report,
+        student_name,
+        ocr.get("engine") or "",
+        ocr.get("ocr_text") or "",
+    )
+    return JSONResponse(
+        _grade_report_payload(
+            report,
+            ocr_engine=ocr.get("engine") or "",
+            ocr_text=ocr.get("ocr_text") or "",
+            persist_error=persist_error,
+            sheet_id=sheet_id,
+        )
+    )
+
+
+@app.post("/api/exam-bank/papers/{paper_id}/regrade-sheet")
+def api_regrade_sheet(paper_id: str, body: RegradeSheetIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise HTTPException(400, "无效的试卷 id")
+    answers: dict[int, str] = {}
+    for item in body.answers:
+        if item.no >= 1:
+            answers[item.no] = item.answer
+    try:
+        paper = get_paper_questions(paper_id)
+        report = grade_paper(paper.get("questions") or [], answers)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    sheet_id, persist_error = _persist_sheet(
+        paper_id,
+        report,
+        body.student_name,
+        "manual",
+        "",
+    )
+    return JSONResponse(
+        _grade_report_payload(
+            report,
+            ocr_engine="manual",
+            persist_error=persist_error,
+            sheet_id=sheet_id,
+        )
+    )
 
 
 class KnowledgeItemIn(BaseModel):
@@ -1949,6 +2486,414 @@ def api_set_question_knowledge(question_id: str, body: SetQuestionKnowledgeIn) -
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
     return JSONResponse({"ok": True, "knowledge_points": saved})
+
+
+class AppSmsIn(BaseModel):
+    phone: str
+
+
+class AppLoginIn(BaseModel):
+    phone: str
+    code: str
+    age_group: str = ""
+    accept_minor_terms: bool = False
+    accept_ip_terms: bool = False
+    guardian_consent: bool = False
+    terms_version: str = ""
+
+
+class AppDeviceIn(BaseModel):
+    platform: str
+    push_token: str
+    vendor: str = ""
+    brand: str = ""
+    app_version: str = ""
+
+
+class AppKnowledgeQueryIn(BaseModel):
+    codes: list[str] = []
+    match: str = "any"
+    type_code: str = ""
+
+
+class AppOrderIn(BaseModel):
+    plan: str
+    channel: str
+    scene: str = "qr"
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if forwarded:
+        return forwarded
+    if request.client:
+        return request.client.host
+    return "127.0.0.1"
+
+
+@app.get("/api/app/config")
+def api_app_config() -> JSONResponse:
+    return JSONResponse(app_runtime_config())
+
+
+@app.post("/api/app/auth/sms")
+def api_app_sms(body: AppSmsIn) -> JSONResponse:
+    try:
+        data = send_sms_code(body.phone.strip())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return JSONResponse(data)
+
+
+@app.post("/api/app/auth/login")
+def api_app_login(body: AppLoginIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        data = login_with_sms(
+            body.phone.strip(),
+            body.code.strip(),
+            age_group=body.age_group,
+            accept_minor_terms=body.accept_minor_terms,
+            accept_ip_terms=body.accept_ip_terms,
+            guardian_consent=body.guardian_consent,
+            terms_version=body.terms_version,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse(data)
+
+
+@app.get("/api/app/me")
+def api_app_me(user: dict = Depends(_app_user)) -> JSONResponse:
+    return JSONResponse({"ok": True, "user": public_user(user)})
+
+
+@app.post("/api/app/orders")
+def api_app_create_order(
+    body: AppOrderIn,
+    request: Request,
+    user: dict = Depends(_app_user),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        data = create_order(
+            user["id"],
+            body.plan.strip(),
+            body.channel.strip(),
+            body.scene.strip() or "qr",
+            client_ip=_client_ip(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "order": data})
+
+
+@app.get("/api/app/orders/{order_id}")
+def api_app_get_order(order_id: str, user: dict = Depends(_app_user)) -> JSONResponse:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", order_id or ""):
+        raise HTTPException(400, "无效的订单 id")
+    try:
+        row = load_order(order_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if str(row.get("user_id")) != str(user.get("id")):
+        raise HTTPException(404, "订单不存在")
+    return JSONResponse({"ok": True, "order": public_order(row)})
+
+
+@app.post("/api/app/orders/{order_id}/mock-pay")
+def api_app_mock_pay(order_id: str, user: dict = Depends(_app_user)) -> JSONResponse:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", order_id or ""):
+        raise HTTPException(400, "无效的订单 id")
+    from word_math_md.app_pay import pay_provider
+
+    if pay_provider() != "dev":
+        raise HTTPException(403, "正式环境不能使用模拟支付")
+    try:
+        row = load_order(order_id)
+        if str(row.get("user_id")) != str(user.get("id")):
+            raise ValueError("订单不存在")
+        order = fulfill_order(order_id, transaction_id="mock")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return JSONResponse({"ok": True, "order": order, "user": public_user(user)})
+
+
+@app.get("/api/app/pay/mock/{order_id}")
+def api_app_mock_page(order_id: str, token: str = "") -> HTMLResponse:
+    try:
+        verify_mock_token(order_id, token)
+        html = mock_page_html(order_id, token)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return HTMLResponse(html)
+
+
+@app.post("/api/app/pay/mock/{order_id}")
+def api_app_mock_page_confirm(order_id: str, token: str = "") -> HTMLResponse:
+    from word_math_md.app_pay import pay_provider
+
+    if pay_provider() != "dev":
+        raise HTTPException(403, "正式环境不能使用模拟支付")
+    try:
+        verify_mock_token(order_id, token)
+        fulfill_order(order_id, transaction_id="mock")
+    except ValueError as exc:
+        return HTMLResponse(mock_result_html(False, str(exc)), status_code=400)
+    return HTMLResponse(mock_result_html(True, "会员已开通，请返回 App。"))
+
+
+@app.post("/api/app/pay/wechat/notify")
+async def api_wechat_notify(request: Request):
+    try:
+        body = json.loads((await request.body()).decode("utf-8") or "{}")
+        data = handle_wechat_notify(body)
+    except Exception as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return JSONResponse(data)
+
+
+@app.post("/api/app/pay/alipay/notify")
+async def api_alipay_notify(request: Request):
+    form = await request.form()
+    params = {str(k): str(v) for k, v in form.items()}
+    return PlainTextResponse(handle_alipay_notify(params))
+
+
+@app.get("/api/app/papers")
+def api_app_papers(
+    user: dict = Depends(_app_user),
+    province: str | None = None,
+    gaokao_paper: str | None = None,
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    _require_member(user)
+    try:
+        papers = slim_papers(province=province, gaokao_paper=gaokao_paper)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse(
+        {"ok": True, "papers": papers, "filters": paper_filter_options()}
+    )
+
+
+@app.get("/api/app/papers/{paper_id}/preview")
+def api_app_paper_preview(paper_id: str, user: dict = Depends(_app_user)) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise HTTPException(400, "无效的试卷 id")
+    _require_member(user)
+    try:
+        data = rewrite_preview_payload(build_paper_preview(paper_id))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    data["katex"] = app_runtime_config()["katex"]
+    return JSONResponse(data)
+
+
+@app.get("/api/app/papers/{paper_id}/pdf")
+def api_app_paper_pdf(paper_id: str, user: dict = Depends(_app_user)) -> Response:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise HTTPException(400, "无效的试卷 id")
+    _require_member(user)
+    try:
+        data = rewrite_preview_payload(build_paper_preview(paper_id))
+        pdf = html_to_pdf_bytes(paper_stem_html(data))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"生成 PDF 失败：{exc}") from exc
+    paper = data.get("paper") or {}
+    name = pdf_filename(str(paper.get("title") or paper.get("paper_code") or "试卷"))
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}",
+        },
+    )
+
+
+@app.get("/api/app/ocr-status")
+def api_app_ocr_status(user: dict = Depends(_app_user)) -> JSONResponse:
+    _require_member(user)
+    data = ocr_configured()
+    data["ok"] = True
+    return JSONResponse(data)
+
+
+@app.post("/api/app/papers/{paper_id}/grade-sheet")
+async def api_app_grade_sheet(
+    paper_id: str,
+    user: dict = Depends(_app_user),
+    files: list[UploadFile] = File(default=[]),
+    student_name: str = Form(""),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise HTTPException(400, "无效的试卷 id")
+    _require_member(user)
+    images: list[tuple[bytes, str]] = []
+    for item in files:
+        raw = await item.read()
+        if not raw:
+            continue
+        images.append((raw, item.content_type or ""))
+    if not images:
+        raise HTTPException(400, "请至少拍摄或选择一张答卷照片。")
+    name = (student_name or "").strip() or str(user.get("nickname") or user.get("phone") or "")
+    try:
+        paper = get_paper_questions(paper_id)
+        ocr = ocr_images(images)
+        report = grade_paper(paper.get("questions") or [], ocr.get("answers_by_no") or {})
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    sheet_id, persist_error = _persist_sheet(
+        paper_id,
+        report,
+        name,
+        ocr.get("engine") or "",
+        ocr.get("ocr_text") or "",
+    )
+    return JSONResponse(
+        _grade_report_payload(
+            report,
+            ocr_engine=ocr.get("engine") or "",
+            ocr_text=ocr.get("ocr_text") or "",
+            persist_error=persist_error,
+            sheet_id=sheet_id,
+        )
+    )
+
+
+@app.get("/api/app/knowledge-points")
+def api_app_knowledge_points(user: dict = Depends(_app_user)) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    _require_member(user)
+    try:
+        points = list_catalog(with_usage=True)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "knowledge_points": points})
+
+
+@app.post("/api/app/questions-by-knowledge")
+def api_app_questions_by_knowledge(
+    body: AppKnowledgeQueryIn,
+    user: dict = Depends(_app_user),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    _require_member(user)
+    try:
+        data = list_questions_by_knowledge(
+            body.codes,
+            match=body.match,
+            type_code=(body.type_code or "").strip(),
+        )
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    slim = []
+    for q in data.get("questions") or []:
+        slim.append(
+            {
+                "id": q.get("id"),
+                "paper_id": q.get("paper_id"),
+                "paper_title": q.get("paper_title"),
+                "question_no": q.get("question_no"),
+                "type_code": q.get("type_code"),
+                "stem_text": (q.get("stem_text") or "")[:240],
+                "score": q.get("score"),
+                "knowledge_codes": q.get("knowledge_codes") or [],
+            }
+        )
+    return JSONResponse(
+        {
+            "ok": True,
+            "codes": data.get("codes") or [],
+            "match": data.get("match") or "any",
+            "questions": slim,
+        }
+    )
+
+
+@app.post("/api/app/practice/preview")
+def api_app_practice_preview(
+    body: PracticePreviewIn,
+    user: dict = Depends(_app_user),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    _require_member(user)
+    try:
+        rows = get_questions_by_ids(body.question_ids)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    if not rows:
+        raise HTTPException(400, "没有可预览的题目，请先选择题目。")
+    numbered = []
+    for i, row in enumerate(rows, start=1):
+        item = dict(row)
+        item["question_no"] = i
+        numbered.append(item)
+    source = questions_to_markdown(numbered)
+    dest = WORK / "preview-bank" / "app-practice"
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    src = dest / "paper.md"
+    src.write_text(source, encoding="utf-8")
+    try:
+        data = parse_markdown_like_gaokao(src)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    parsed = data.get("questions") or []
+    for i, item in enumerate(parsed):
+        dbq = numbered[i] if i < len(numbered) else None
+        if not dbq:
+            continue
+        item["question_id"] = dbq.get("id")
+        item["type_code"] = dbq.get("type_code") or ""
+        item["knowledge_points"] = dbq.get("knowledge_points") or []
+        item["paper_title"] = dbq.get("paper_title") or ""
+        item["source_question_no"] = dbq.get("source_question_no")
+    data["ok"] = True
+    data["questions"] = parsed
+    data["katex"] = app_runtime_config()["katex"]
+    return JSONResponse(rewrite_preview_payload(data))
+
+
+@app.post("/api/app/devices")
+def api_app_devices(body: AppDeviceIn, user: dict = Depends(_app_user)) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        data = register_device(user["id"], body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse(data)
 
 
 if KATEX_DIR.is_dir():

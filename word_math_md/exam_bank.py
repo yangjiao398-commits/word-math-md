@@ -33,6 +33,67 @@ PAPER_SEMESTERS = (
     "高三下学期",
 )
 PAPER_EXAM_TYPES = ("月考", "期中", "期末")
+PAPER_PROVINCES = (
+    "北京",
+    "天津",
+    "河北",
+    "山西",
+    "内蒙古",
+    "辽宁",
+    "吉林",
+    "黑龙江",
+    "上海",
+    "江苏",
+    "浙江",
+    "安徽",
+    "福建",
+    "江西",
+    "山东",
+    "河南",
+    "湖北",
+    "湖南",
+    "广东",
+    "广西",
+    "海南",
+    "重庆",
+    "四川",
+    "贵州",
+    "云南",
+    "西藏",
+    "陕西",
+    "甘肃",
+    "青海",
+    "宁夏",
+    "新疆",
+)
+PAPER_GAOKAO_PAPERS = ("全国A卷", "全国B卷")
+_PROVINCE_SET = set(PAPER_PROVINCES)
+_PROVINCE_ALIASES = {
+    "北京市": "北京",
+    "天津市": "天津",
+    "上海市": "上海",
+    "重庆市": "重庆",
+    "内蒙古自治区": "内蒙古",
+    "广西壮族自治区": "广西",
+    "西藏自治区": "西藏",
+    "宁夏回族自治区": "宁夏",
+    "新疆维吾尔自治区": "新疆",
+    "新疆维吾尔族自治区": "新疆",
+}
+_GAOKAO_PAPER_ALIASES = {
+    "A卷": "全国A卷",
+    "全国卷A": "全国A卷",
+    "全国甲卷": "全国A卷",
+    "甲卷": "全国A卷",
+    "B卷": "全国B卷",
+    "全国卷B": "全国B卷",
+    "全国乙卷": "全国B卷",
+    "乙卷": "全国B卷",
+}
+_PAPER_LIST_SELECT = (
+    "id,paper_code,title,source_filename,semester,exam_type,"
+    "province,gaokao_paper,created_at,updated_at"
+)
 SECTION_MARKERS = ("【答案】", "【解析】", "【分析】", "【详解】", "【知识点】")
 MARKER_TO_KEY = {
     "【答案】": "answer",
@@ -319,6 +380,40 @@ def normalize_paper_exam_type(value: str | None) -> str:
     return text
 
 
+def normalize_paper_province(value: str | None) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    text = _PROVINCE_ALIASES.get(text, text)
+    if text not in _PROVINCE_SET:
+        for suffix in ("特别行政区", "维吾尔自治区", "壮族自治区", "回族自治区", "自治区", "省", "市"):
+            if text.endswith(suffix):
+                candidate = text[: -len(suffix)]
+                if candidate in _PROVINCE_SET:
+                    text = candidate
+                    break
+    if text not in _PROVINCE_SET:
+        raise ValueError("省份必须是中国大陆省级行政区。")
+    return text
+
+
+def normalize_gaokao_paper(value: str | None) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    text = _GAOKAO_PAPER_ALIASES.get(text, text)
+    if text not in PAPER_GAOKAO_PAPERS:
+        raise ValueError("高考试卷必须是全国A卷或全国B卷。")
+    return text
+
+
+def paper_filter_options() -> dict[str, list[str]]:
+    return {
+        "provinces": list(PAPER_PROVINCES),
+        "gaokao_papers": list(PAPER_GAOKAO_PAPERS),
+    }
+
+
 def _client():
     _load_env()
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -473,7 +568,13 @@ def upsert_knowledge_points(client, items: list[ParsedKnowledge]) -> None:
         client.table("knowledge_points").insert(to_insert).execute()
 
 
-def import_parsed_paper(paper: ParsedPaper, asset_dir: Path | None = None) -> dict[str, Any]:
+def import_parsed_paper(
+    paper: ParsedPaper,
+    asset_dir: Path | None = None,
+    *,
+    province: str | None = None,
+    gaokao_paper: str | None = None,
+) -> dict[str, Any]:
     client = _client()
     _ensure_bucket(client)
 
@@ -507,6 +608,10 @@ def import_parsed_paper(paper: ParsedPaper, asset_dir: Path | None = None) -> di
         "source_md": paper.source_md,
         "extra": {},
     }
+    if province:
+        payload["province"] = normalize_paper_province(province)
+    if gaokao_paper:
+        payload["gaokao_paper"] = normalize_gaokao_paper(gaokao_paper)
     if existing.data:
         paper_id = existing.data[0]["id"]
         client.table("questions").delete().eq("paper_id", paper_id).execute()
@@ -616,6 +721,8 @@ def import_markdown_file(
     *,
     paper_code: str | None = None,
     title: str | None = None,
+    province: str | None = None,
+    gaokao_paper: str | None = None,
 ) -> dict[str, Any]:
     raw = path.read_text(encoding="utf-8-sig")
     paper = parse_markdown_paper(
@@ -625,18 +732,34 @@ def import_markdown_file(
         title=title,
     )
     asset_dir = path.parent
-    return import_parsed_paper(paper, asset_dir=asset_dir)
+    return import_parsed_paper(
+        paper,
+        asset_dir=asset_dir,
+        province=province,
+        gaokao_paper=gaokao_paper,
+    )
 
 
-def list_papers(limit: int = 50) -> list[dict[str, Any]]:
+def list_papers(
+    limit: int = 50,
+    *,
+    province: str | None = None,
+    gaokao_paper: str | None = None,
+) -> list[dict[str, Any]]:
     client = _client()
-    res = (
+    query = (
         client.table("papers")
-        .select("id,paper_code,title,source_filename,semester,exam_type,created_at,updated_at")
+        .select(_PAPER_LIST_SELECT)
         .order("updated_at", desc=True)
         .limit(limit)
-        .execute()
     )
+    province_n = normalize_paper_province(province)
+    gaokao_n = normalize_gaokao_paper(gaokao_paper)
+    if province_n:
+        query = query.eq("province", province_n)
+    if gaokao_n:
+        query = query.eq("gaokao_paper", gaokao_n)
+    res = query.execute()
     rows = list(res.data or [])
     for row in rows:
         count = (
@@ -654,14 +777,20 @@ def update_paper_meta(
     *,
     semester: str | None = None,
     exam_type: str | None = None,
+    province: str | None = None,
+    gaokao_paper: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if semester is not None:
         payload["semester"] = normalize_paper_semester(semester)
     if exam_type is not None:
         payload["exam_type"] = normalize_paper_exam_type(exam_type)
+    if province is not None:
+        payload["province"] = normalize_paper_province(province)
+    if gaokao_paper is not None:
+        payload["gaokao_paper"] = normalize_gaokao_paper(gaokao_paper)
     if len(payload) == 1:
-        raise ValueError("请选择学期或考试类型。")
+        raise ValueError("请选择要保存的试卷属性。")
     client = _client()
     found = (
         client.table("papers")
@@ -675,7 +804,7 @@ def update_paper_meta(
     client.table("papers").update(payload).eq("id", paper_id).execute()
     row = (
         client.table("papers")
-        .select("id,paper_code,title,semester,exam_type,updated_at")
+        .select("id,paper_code,title,semester,exam_type,province,gaokao_paper,updated_at")
         .eq("id", paper_id)
         .single()
         .execute()
@@ -687,7 +816,10 @@ def get_paper_questions(paper_id: str) -> dict[str, Any]:
     client = _client()
     paper = (
         client.table("papers")
-        .select("id,paper_code,title,source_filename,source_md,semester,exam_type,created_at,updated_at")
+        .select(
+            "id,paper_code,title,source_filename,source_md,semester,exam_type,"
+            "province,gaokao_paper,created_at,updated_at"
+        )
         .eq("id", paper_id)
         .single()
         .execute()
@@ -949,7 +1081,7 @@ def list_questions_by_knowledge(
     for chunk in _chunked(paper_ids):
         pres = (
             client.table("papers")
-            .select("id,paper_code,title,semester,exam_type")
+            .select("id,paper_code,title,semester,exam_type,province,gaokao_paper")
             .in_("id", chunk)
             .execute()
         )
@@ -966,6 +1098,8 @@ def list_questions_by_knowledge(
                 "paper_code": paper.get("paper_code") or "",
                 "paper_semester": paper.get("semester") or "",
                 "paper_exam_type": paper.get("exam_type") or "",
+                "paper_province": paper.get("province") or "",
+                "paper_gaokao_paper": paper.get("gaokao_paper") or "",
                 "matched_codes": sorted(hits_by_q.get(q["id"], set()) & wanted_set),
             }
         )
@@ -1014,7 +1148,7 @@ def get_questions_by_ids(question_ids: list[str], *, limit: int = 300) -> list[d
     for chunk in _chunked(paper_ids):
         pres = (
             client.table("papers")
-            .select("id,paper_code,title,semester,exam_type")
+            .select("id,paper_code,title,semester,exam_type,province,gaokao_paper")
             .in_("id", chunk)
             .execute()
         )
@@ -1027,6 +1161,8 @@ def get_questions_by_ids(question_ids: list[str], *, limit: int = 300) -> list[d
         q["paper_code"] = paper.get("paper_code") or ""
         q["paper_semester"] = paper.get("semester") or ""
         q["paper_exam_type"] = paper.get("exam_type") or ""
+        q["paper_province"] = paper.get("province") or ""
+        q["paper_gaokao_paper"] = paper.get("gaokao_paper") or ""
         q["source_question_no"] = q.get("question_no")
     return ordered
 
@@ -1211,3 +1347,124 @@ def sync_geogebra_pep_animations(*, live: bool = True) -> dict[str, Any]:
         "skipped_unknown_codes": skipped,
         "live": live,
     }
+
+
+def save_answer_sheet(
+    paper_id: str,
+    report: dict[str, Any],
+    *,
+    student_name: str = "",
+    ocr_engine: str = "",
+    ocr_text: str = "",
+) -> dict[str, Any]:
+    """Persist an auto-graded photographed answer sheet."""
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise ValueError("无效的试卷 id")
+    client = _client()
+    found = (
+        client.table("papers")
+        .select("id")
+        .eq("id", paper_id)
+        .limit(1)
+        .execute()
+    )
+    if not found.data:
+        raise ValueError("试卷不存在")
+    name = re.sub(r"\s+", " ", (student_name or "").strip())[:80]
+    sheet_row = {
+        "paper_id": paper_id,
+        "student_name": name,
+        "ocr_engine": (ocr_engine or "")[:40],
+        "ocr_text": (ocr_text or "")[:20000],
+        "total_score": report.get("total_score") or 0,
+        "max_score": report.get("max_score") or 0,
+        "correct_count": int(report.get("correct_count") or 0),
+        "question_count": int(report.get("question_count") or 0),
+        "extra": {
+            "needs_review_count": int(report.get("needs_review_count") or 0),
+            "missing_count": int(report.get("missing_count") or 0),
+            "recognized_count": int(report.get("recognized_count") or 0),
+        },
+    }
+    inserted = client.table("answer_sheets").insert(sheet_row).execute()
+    sheet = (inserted.data or [{}])[0]
+    sheet_id = sheet.get("id")
+    item_rows = []
+    for item in report.get("items") or []:
+        qid = item.get("question_id")
+        if qid and not re.fullmatch(r"[0-9a-fA-F-]{36}", str(qid)):
+            qid = None
+        item_rows.append(
+            {
+                "sheet_id": sheet_id,
+                "question_id": qid,
+                "question_no": int(item.get("question_no") or 0),
+                "type_code": str(item.get("type_code") or "")[:40],
+                "student_answer": str(item.get("student_answer") or "")[:500],
+                "expected_answer": str(item.get("expected_answer") or "")[:500],
+                "is_correct": bool(item.get("is_correct")),
+                "status": str(item.get("status") or "graded")[:20],
+                "score": item.get("score") or 0,
+                "max_score": item.get("max_score") or 0,
+            }
+        )
+    if item_rows:
+        for start in range(0, len(item_rows), 80):
+            client.table("answer_sheet_items").insert(item_rows[start : start + 80]).execute()
+    return {
+        "id": sheet_id,
+        "paper_id": paper_id,
+        "student_name": name,
+        "ocr_engine": ocr_engine,
+        "created_at": sheet.get("created_at"),
+        **report,
+    }
+
+
+def list_answer_sheets(paper_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise ValueError("无效的试卷 id")
+    client = _client()
+    res = (
+        client.table("answer_sheets")
+        .select(
+            "id,paper_id,student_name,ocr_engine,total_score,max_score,"
+            "correct_count,question_count,extra,created_at"
+        )
+        .eq("paper_id", paper_id)
+        .order("created_at", desc=True)
+        .limit(max(1, min(limit, 50)))
+        .execute()
+    )
+    return list(res.data or [])
+
+
+def get_answer_sheet(sheet_id: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", sheet_id or ""):
+        raise ValueError("无效的答卷 id")
+    client = _client()
+    sheet = (
+        client.table("answer_sheets")
+        .select(
+            "id,paper_id,student_name,ocr_engine,ocr_text,total_score,max_score,"
+            "correct_count,question_count,extra,created_at"
+        )
+        .eq("id", sheet_id)
+        .single()
+        .execute()
+    )
+    if not sheet.data:
+        raise ValueError("答卷不存在")
+    items = (
+        client.table("answer_sheet_items")
+        .select(
+            "id,question_id,question_no,type_code,student_answer,expected_answer,"
+            "is_correct,status,score,max_score"
+        )
+        .eq("sheet_id", sheet_id)
+        .order("question_no")
+        .execute()
+    )
+    data = dict(sheet.data)
+    data["items"] = list(items.data or [])
+    return data

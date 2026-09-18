@@ -28,6 +28,8 @@ dependencies = [
   "beautifulsoup4>=4.12",
   "python-dotenv>=1.0",
   "supabase>=2.8",
+  "rapidocr-onnxruntime>=1.2",
+  "cryptography>=42.0",
 ]
 
 [project.optional-dependencies]
