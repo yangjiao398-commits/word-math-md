@@ -94,8 +94,9 @@ CREATE TABLE IF NOT EXISTS questions (
   UNIQUE (paper_id, question_no)
 );
 
--- Existing databases created before knowledge_codes was added.
+-- Existing databases created before knowledge_codes / score was added.
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS knowledge_codes TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS score NUMERIC(6,2);
 
 CREATE INDEX IF NOT EXISTS questions_paper_order ON questions (paper_id, sort_order);
 CREATE INDEX IF NOT EXISTS questions_type ON questions (type_code);

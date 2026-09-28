@@ -1,6 +1,7 @@
 import re
 
 from word_math_md.exam_bank import (
+    delete_paper,
     PAPER_EXAM_TYPES,
     PAPER_GAOKAO_PAPERS,
     PAPER_PROVINCES,
@@ -81,6 +82,83 @@ def test_paper_meta_allowed_values():
         pass
     assert len(PAPER_PROVINCES) == 31
     assert PAPER_GAOKAO_PAPERS == ("全国A卷", "全国B卷")
+
+
+def test_parse_scores_from_type_headers_and_item_notes():
+    md = """# 模拟卷
+
+一、选择题：本题共2小题，每小题5分，共10分.只有一个选项符合题目要求.
+
+1. 已知 $a>0$
+A. $1$
+B. $2$
+【答案】A
+
+2. 下列正确的是
+A. 甲
+B. 乙
+【答案】A
+
+二、填空题：本题共1小题，每小题5分，共5分.
+
+3. 空格填 ______ 。
+【答案】$3$
+
+三、解答题：本题共2小题，共20分.解答应写出文字说明.
+
+4. （12分）证明：三角形内角和为 $180^\\circ$。
+【详解】延长并作平行线。
+
+5. 计算 $1+1$。
+【详解】$2$
+"""
+    paper = parse_markdown_paper(md, filename="score.md")
+    assert [q.score for q in paper.questions] == [5.0, 5.0, 5.0, 12.0, 8.0]
+
+
+def test_parse_scores_from_numbered_range():
+    md = """第1～2题每小题4分。第3题8分。
+
+1. 题一
+A. 1
+B. 2
+【答案】A
+
+2. 题二
+A. 1
+B. 2
+【答案】B
+
+3. 证明本题。
+【详解】略
+"""
+    paper = parse_markdown_paper(md, filename="range.md")
+    assert [q.score for q in paper.questions] == [4.0, 4.0, 8.0]
+
+
+def test_parse_keeps_exam_header_out_of_first_stem():
+    md = """深圳实验学校高中部2023-2024学年度第一学期第二阶段考试
+
+高一数学
+
+时间：120分钟 满分：150分
+
+考生注意：答题前请认真阅读。
+
+一、选择题（本大题共1小题，每小题5分，共5分）
+
+1. 已知 $a>0$（5分）
+A. $1$
+B. $2$
+【答案】A
+"""
+    paper = parse_markdown_paper(md, filename="深圳实验.md")
+    stem = paper.questions[0].stem_md
+    assert "已知" in stem
+    assert "深圳实验学校" not in stem
+    assert "120分钟" not in stem
+    assert "满分：150分" not in stem
+    assert paper.questions[0].score == 5
 
 
 def test_parse_questions_in_order():
@@ -164,3 +242,125 @@ def test_questions_to_markdown_roundtrip_markers():
     assert "【分析】比较即可" in md
     assert "【详解】选 A" in md
     assert "【知识点】1.1 集合" in md
+
+
+class _FakeResult:
+    def __init__(self, data=None):
+        self.data = data or []
+
+
+class _FakeStorage:
+    def __init__(self):
+        self.removed = []
+
+    def from_(self, _bucket):
+        return self
+
+    def remove(self, keys):
+        self.removed.extend(keys)
+        return {"data": list(keys)}
+
+
+class _FakeQuery:
+    def __init__(self, client, name):
+        self.client = client
+        self.name = name
+        self._eq = {}
+        self._in = {}
+        self._delete = False
+
+    def select(self, *_a, **_k):
+        return self
+
+    def eq(self, key, value):
+        self._eq[key] = value
+        return self
+
+    def in_(self, key, values):
+        self._in[key] = list(values)
+        return self
+
+    def limit(self, _n):
+        return self
+
+    def delete(self):
+        self._delete = True
+        return self
+
+    def execute(self):
+        rows = self.client.tables.setdefault(self.name, [])
+        if self._delete:
+            if self._eq:
+                key, value = next(iter(self._eq.items()))
+                self.client.tables[self.name] = [row for row in rows if row.get(key) != value]
+            elif self._in:
+                key, values = next(iter(self._in.items()))
+                keep = set(values)
+                self.client.tables[self.name] = [row for row in rows if row.get(key) not in keep]
+            else:
+                self.client.tables[self.name] = []
+            self.client.deletes.append(self.name)
+            return _FakeResult([])
+        filtered = rows
+        for key, value in self._eq.items():
+            filtered = [row for row in filtered if row.get(key) == value]
+        return _FakeResult(list(filtered))
+
+
+class _FakeClient:
+    def __init__(self, tables):
+        self.tables = tables
+        self.deletes = []
+        self.storage = _FakeStorage()
+
+    def table(self, name):
+        return _FakeQuery(self, name)
+
+
+def test_delete_paper_removes_questions_and_paper(monkeypatch):
+    paper_id = "11111111-1111-1111-1111-111111111111"
+    q1 = "22222222-2222-2222-2222-222222222222"
+    q2 = "33333333-3333-3333-3333-333333333333"
+    client = _FakeClient(
+        {
+            "papers": [{"id": paper_id, "paper_code": "demo", "title": "测试卷"}],
+            "questions": [
+                {"id": q1, "paper_id": paper_id},
+                {"id": q2, "paper_id": paper_id},
+            ],
+            "question_options": [{"question_id": q1, "label": "A"}],
+            "question_knowledge_points": [{"question_id": q1, "knowledge_code": "1.1"}],
+            "answer_sheets": [{"id": "s1", "paper_id": paper_id}],
+            "answer_sheet_items": [{"question_id": q1, "sheet_id": "s1"}],
+            "assets": [{"paper_id": paper_id, "storage_key": "demo/a.png"}],
+        }
+    )
+    monkeypatch.setattr("word_math_md.exam_bank._client", lambda: client)
+    out = delete_paper(paper_id)
+    assert out["paper_id"] == paper_id
+    assert out["title"] == "测试卷"
+    assert out["question_count"] == 2
+    assert out["asset_count"] == 1
+    assert client.tables["papers"] == []
+    assert client.tables["questions"] == []
+    assert client.tables["question_options"] == []
+    assert client.tables["question_knowledge_points"] == []
+    assert client.tables["answer_sheets"] == []
+    assert client.tables["answer_sheet_items"] == []
+    assert client.tables["assets"] == []
+    assert "demo/a.png" in client.storage.removed
+
+
+def test_delete_paper_rejects_missing_and_invalid_ids(monkeypatch):
+    client = _FakeClient({"papers": []})
+    monkeypatch.setattr("word_math_md.exam_bank._client", lambda: client)
+    try:
+        delete_paper("not-a-uuid")
+        raise AssertionError("expected ValueError")
+    except ValueError as exc:
+        assert "无效" in str(exc)
+    try:
+        delete_paper("11111111-1111-1111-1111-111111111111")
+        raise AssertionError("expected ValueError")
+    except ValueError as exc:
+        assert "不存在" in str(exc)

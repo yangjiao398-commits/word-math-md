@@ -4,6 +4,7 @@ from word_math_md.app_api import (
     issue_token,
     rewrite_asset_url,
     rewrite_html_assets,
+    rewrite_preview_payload,
     send_sms_code,
     verify_sms_code,
 )
@@ -26,6 +27,23 @@ def test_rewrite_html_keeps_katex_and_swaps_img(monkeypatch):
     assert 'src="https://cdn.math-agent.cn/files/job/fig.png"' in out
 
 
+def test_rewrite_preview_payload_rewrites_header_images(monkeypatch):
+    monkeypatch.setenv("APP_CDN_BASE", "https://cdn.math-agent.cn")
+    out = rewrite_preview_payload(
+        {
+            "headerHtml": '<p>卷头</p><img src="/files/job/logo.png">',
+            "sections": [
+                {"title": "一、选择题", "titleHtml": '<p>一、选择题</p><img src="/files/job/sec.png">'}
+            ],
+            "questions": [{"stemHtml": '<img src="/files/job/q.png">'}],
+        }
+    )
+    assert "卷头" in out["headerHtml"]
+    assert 'src="https://cdn.math-agent.cn/files/job/logo.png"' in out["headerHtml"]
+    assert 'src="https://cdn.math-agent.cn/files/job/sec.png"' in out["sections"][0]["titleHtml"]
+    assert 'src="https://cdn.math-agent.cn/files/job/q.png"' in out["questions"][0]["stemHtml"]
+
+
 def test_jwt_roundtrip():
     token = issue_token({"id": "11111111-1111-1111-1111-111111111111", "phone": "13900000000"})
     payload = decode_token(token)
@@ -35,6 +53,32 @@ def test_jwt_roundtrip():
 def test_dev_sms_code():
     send_sms_code("13900001111")
     verify_sms_code("13900001111", "888888")
+
+
+def test_exam_bank_delete_paper_api(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from word_math_md import server
+
+    paper_id = "11111111-1111-1111-1111-111111111111"
+    monkeypatch.setattr(server, "exam_bank_configured", lambda: True)
+    monkeypatch.setattr(
+        server,
+        "delete_paper",
+        lambda pid: {
+            "paper_id": pid,
+            "paper_code": "demo",
+            "title": "测试卷",
+            "question_count": 2,
+            "asset_count": 0,
+        },
+    )
+    res = TestClient(server.app).delete(f"/api/exam-bank/papers/{paper_id}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["ok"] is True
+    assert data["paper_id"] == paper_id
+    assert data["question_count"] == 2
 
 
 def test_app_runtime_config_katex_matches_preview():

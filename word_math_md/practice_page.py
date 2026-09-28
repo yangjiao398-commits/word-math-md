@@ -166,7 +166,7 @@ PAGE_HTML = r"""<!doctype html>
       body.viewing-paper .print-stem { overflow: visible; color: #111; }
       body.viewing-paper .print-stem img { max-height: none; border: 0; }
       body.viewing-paper .print-answer-space {
-        display: block; height: 148.5mm; margin-top: 4mm;
+        display: block; height: 297mm; margin-top: 4mm;
       }
     }
   </style>
@@ -613,6 +613,7 @@ PAGE_HTML = r"""<!doctype html>
         html += qs.map(q => {
           let card = '<article class="q-card"><div class="q-meta no-print">';
           card += '<span class="chip">第 ' + esc(q.index) + ' 题</span>';
+          if (q.score != null && q.score !== '') card += '<span class="chip">' + esc(q.score) + ' 分</span>';
           if (q.paper_title) card += '<span class="chip">' + esc(q.paper_title) + '</span>';
           (q.knowledge_points || []).forEach(k => {
             card += '<span class="chip">' + esc(k.code) + '</span>';

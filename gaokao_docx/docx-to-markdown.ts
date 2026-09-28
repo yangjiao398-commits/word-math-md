@@ -48,31 +48,127 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-async function preprocessDocx(arrayBuffer: ArrayBuffer): Promise<{
-  buffer: ArrayBuffer;
-  mathConverted: number;
-}> {
-  try {
-    const zip = await JSZip.loadAsync(arrayBuffer);
-    const docEntry = zip.file("word/document.xml");
-    if (!docEntry) return { buffer: arrayBuffer, mathConverted: 0 };
-    const xml = await docEntry.async("string");
-    const { xml: nextXml, count } = replaceOmmlWithLatexInXml(xml);
-    if (count === 0) return { buffer: arrayBuffer, mathConverted: 0 };
-    zip.file("word/document.xml", nextXml);
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
-    return { buffer, mathConverted: count };
-  } catch {
-    return { buffer: arrayBuffer, mathConverted: 0 };
-  }
+type HtmlNode = {
+  nodeName?: string;
+  childNodes?: ArrayLike<HtmlNode>;
+  textContent?: string | null;
+  getAttribute?: (name: string) => string | null;
+};
+
+function htmlNodeName(node: HtmlNode): string {
+  return String(node.nodeName || "").toLowerCase();
 }
 
-function htmlToMarkdown(html: string): string {
+function htmlChildren(node: HtmlNode): HtmlNode[] {
+  const kids = node.childNodes;
+  if (!kids) return [];
+  return Array.from(kids);
+}
+
+function collectNodes(root: HtmlNode, names: Set<string>): HtmlNode[] {
+  const out: HtmlNode[] = [];
+  const walk = (node: HtmlNode) => {
+    if (names.has(htmlNodeName(node))) out.push(node);
+    for (const child of htmlChildren(node)) walk(child);
+  };
+  walk(root);
+  return out;
+}
+
+function cellText(cell: HtmlNode, forGfm = true): string {
+  const text = String(cell.textContent || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return forGfm ? text.replace(/\|/g, "\\|") : text;
+}
+
+function trimEmptyColumns(grid: string[][]): string[][] {
+  if (!grid.length) return grid;
+  let width = Math.max(...grid.map((row) => row.length), 0);
+  while (width > 1 && grid.every((row) => !(row[width - 1] || "").trim())) {
+    width -= 1;
+  }
+  return grid.map((row) => {
+    const next = row.slice(0, width);
+    while (next.length < width) next.push("");
+    return next;
+  });
+}
+
+function tableToGfm(table: HtmlNode): string {
+  const rows = collectNodes(table, new Set(["tr"]));
+  if (!rows.length) return "";
+  const grid = trimEmptyColumns(
+    rows.map((row) => collectNodes(row, new Set(["th", "td"])).map(cellText)),
+  );
+  const width = grid[0]?.length ?? 0;
+  if (width < 2 || grid.length < 2) return "";
+  const pipe = (row: string[]) => `| ${row.join(" | ")} |`;
+  const sep = `| ${Array.from({ length: width }, () => "---").join(" | ")} |`;
+  return [pipe(grid[0]!), sep, ...grid.slice(1).map(pipe)].join("\n");
+}
+
+function escapeHtmlAttr(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function serializeTableHtml(table: HtmlNode): string {
+  const rows = collectNodes(table, new Set(["tr"]));
+  const body = rows
+    .map((row) => {
+      const cells = collectNodes(row, new Set(["th", "td"]))
+        .map((cell) => {
+          const tag = htmlNodeName(cell) === "th" ? "th" : "td";
+          const spanBits = ["colspan", "rowspan"]
+            .map((name) => {
+              const value = cell.getAttribute?.(name);
+              return value && value !== "1" ? ` ${name}="${escapeHtmlAttr(value)}"` : "";
+            })
+            .join("");
+          return `<${tag}${spanBits}>${escapeHtmlAttr(cellText(cell)).replace(/\\\|/g, "|")}</${tag}>`;
+        })
+        .join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+  return `<table>${body}</table>`;
+}
+
+function tableHasSpan(table: HtmlNode): boolean {
+  return collectNodes(table, new Set(["th", "td"])).some((cell) => {
+    const colspan = cell.getAttribute?.("colspan") || "";
+    const rowspan = cell.getAttribute?.("rowspan") || "";
+    return (colspan && colspan !== "1") || (rowspan && rowspan !== "1");
+  });
+}
+
+function htmlTableToMarkdown(table: HtmlNode): string {
+  if (tableHasSpan(table)) {
+    const html = serializeTableHtml(table);
+    return html ? `\n\n${html}\n\n` : "";
+  }
+  const gfm = tableToGfm(table);
+  if (gfm) return `\n\n${gfm}\n\n`;
+  const html = serializeTableHtml(table);
+  return html ? `\n\n${html}\n\n` : "";
+}
+
+export function htmlToMarkdown(html: string): string {
   const turndown = new TurndownService({
     headingStyle: "atx",
     codeBlockStyle: "fenced",
     bulletListMarker: "-",
     emDelimiter: "*",
+  });
+
+  turndown.addRule("tables", {
+    filter: "table",
+    replacement: (_content, node) => htmlTableToMarkdown(node as HtmlNode),
   });
 
   turndown.addRule("images", {
@@ -110,7 +206,7 @@ function htmlToMarkdown(html: string): string {
   md = md.replace(/(^|\n)([ \t]*)(\d+)\\([.．])/gm, "$1$2$3$4");
   md = md.replace(/([A-Da-d])\\([.．、])/g, "$1$2");
   md = md.replace(/\\\$/g, "$");
-  // 清掉误入的 HTML 残片
+  // 清掉误入的 HTML 残片，但保留表格
   md = md.replace(/<\/?(?:span|div|font)[^>]*>/gi, "");
   // 选项后裸 LaTeX 自动加 $
   md = wrapBareLatexAfterOptions(md);
@@ -131,6 +227,25 @@ function extFromContentType(contentType: string): string {
   if (t.includes("webp")) return "webp";
   if (t.includes("svg")) return "svg";
   return "bin";
+}
+
+async function preprocessDocx(arrayBuffer: ArrayBuffer): Promise<{
+  buffer: ArrayBuffer;
+  mathConverted: number;
+}> {
+  try {
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const docEntry = zip.file("word/document.xml");
+    if (!docEntry) return { buffer: arrayBuffer, mathConverted: 0 };
+    const xml = await docEntry.async("string");
+    const { xml: nextXml, count } = replaceOmmlWithLatexInXml(xml);
+    if (count === 0) return { buffer: arrayBuffer, mathConverted: 0 };
+    zip.file("word/document.xml", nextXml);
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    return { buffer, mathConverted: count };
+  } catch {
+    return { buffer: arrayBuffer, mathConverted: 0 };
+  }
 }
 
 /**

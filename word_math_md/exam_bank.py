@@ -109,6 +109,21 @@ OPTION_RE = re.compile(
     r"(?m)^[ \t]*(?:[(（]\s*)?([A-G])(?:[)）]|[.．、])[ \t]+"
 )
 SCORE_RE = re.compile(r"[（(]\s*(\d+(?:\.\d+)?)\s*分\s*[）)]")
+SUBQUESTION_SCORE_RE = re.compile(r"本小题满分\s*(\d+(?:\.\d+)?)\s*分")
+SECTION_HEADER_RE = re.compile(
+    r"(?:^|\n)\s*(?:\*{0,2})\s*[一二三四五六七八九十][、､.．]\s*"
+    r"(?P<label>单项选择题|多项选择题|单项选择|多项选择|单选题|多选题|选择题|填空题|解答题)"
+    r"(?P<rest>[^\n]{0,180})",
+)
+SECTION_COUNT_RE = re.compile(r"共\s*(\d+)\s*小题")
+SECTION_EACH_RE = re.compile(r"每小?题\s*(\d+(?:\.\d+)?)\s*分")
+SECTION_TOTAL_RE = re.compile(r"共\s*(\d+(?:\.\d+)?)\s*分")
+QUESTION_RANGE_SCORE_RE = re.compile(
+    r"第\s*(\d+)\s*[~\-～—至到]\s*(\d+)\s*题[^。\n]{0,40}每小?题\s*(\d+(?:\.\d+)?)\s*分"
+)
+QUESTION_ONE_SCORE_RE = re.compile(
+    r"第\s*(\d+)\s*题[^。\n]{0,24}(?:本小题)?(?:满分)?\s*(\d+(?:\.\d+)?)\s*分"
+)
 DATA_IMG_RE = re.compile(
     r"!\[([^\]]*)\]\((data:image/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+))\)"
 )
@@ -204,7 +219,7 @@ def split_sections(block: str) -> dict[str, str]:
     return {"stem": stem, **buckets}
 
 
-def split_by_question_number(text: str) -> list[tuple[int, str]]:
+def _question_hits(text: str) -> list[tuple[int, int, int]]:
     hits: list[tuple[int, int, int]] = []
     for m in QUESTION_RE.finditer(text):
         index = int(m.group(1) or m.group(2))
@@ -232,17 +247,18 @@ def split_by_question_number(text: str) -> list[tuple[int, str]]:
         chain = take_chain(hit[0])
         if len(chain) > len(filtered):
             filtered = chain
+    return filtered
+
+
+def split_by_question_number(text: str) -> list[tuple[int, str]]:
+    filtered = _question_hits(text)
     if not filtered:
         return []
 
     out: list[tuple[int, str]] = []
-    for i, (index, start, body_start) in enumerate(filtered):
+    for i, (index, _start, body_start) in enumerate(filtered):
         end = filtered[i + 1][1] if i + 1 < len(filtered) else len(text)
         body = text[body_start:end].strip()
-        if i == 0 and start > 0:
-            preamble = text[:start].strip()
-            if len(preamble) >= 40 and not re.match(r"^(学科网|机密|注意事项)", preamble):
-                body = f"{preamble}\n\n{body}".strip()
         if body:
             out.append((index, body))
     return out
@@ -276,10 +292,82 @@ def parse_knowledge_points(text: str) -> list[ParsedKnowledge]:
 
 
 def extract_score(text: str) -> float | None:
-    m = SCORE_RE.search(text)
+    if not text:
+        return None
+    m = SCORE_RE.search(text) or SUBQUESTION_SCORE_RE.search(text)
     if not m:
         return None
     return float(m.group(1))
+
+
+def _distribute_points(total: float, n: int) -> list[float]:
+    if n <= 0:
+        return []
+    if abs(total - round(total)) < 1e-9:
+        tot_i = int(round(total))
+        base, rem = divmod(tot_i, n)
+        return [float(base + (1 if i >= n - rem else 0)) for i in range(n)]
+    each = round(total / n, 2)
+    head = [each] * (n - 1)
+    last = round(total - each * (n - 1), 2)
+    return head + [last]
+
+
+def apply_declared_scores(text: str, questions: list[ParsedQuestion]) -> None:
+    """Fill missing scores from type headers and numbered score notes in the paper."""
+    if not questions:
+        return
+    by_no = {q.question_no: q for q in questions}
+    hits = _question_hits(text)
+    positions = {index: start for index, start, _end in hits}
+
+    def assign(number: int, points: float) -> None:
+        q = by_no.get(number)
+        if q is None or q.score is not None:
+            return
+        if points <= 0:
+            return
+        q.score = float(points)
+
+    for m in QUESTION_RANGE_SCORE_RE.finditer(text):
+        a, b = int(m.group(1)), int(m.group(2))
+        pts = float(m.group(3))
+        lo, hi = (a, b) if a <= b else (b, a)
+        for number in range(lo, hi + 1):
+            assign(number, pts)
+    for m in QUESTION_ONE_SCORE_RE.finditer(text):
+        assign(int(m.group(1)), float(m.group(2)))
+
+    headers = list(SECTION_HEADER_RE.finditer(text))
+    for i, m in enumerate(headers):
+        start = m.start()
+        end = headers[i + 1].start() if i + 1 < len(headers) else len(text)
+        rest = m.group("rest") or ""
+        nos = sorted(n for n, pos in positions.items() if start < pos < end)
+        if not nos:
+            continue
+        count_m = SECTION_COUNT_RE.search(rest)
+        if count_m:
+            nos = nos[: int(count_m.group(1))]
+        each_m = SECTION_EACH_RE.search(rest)
+        total_m = SECTION_TOTAL_RE.search(rest)
+        if each_m:
+            pts = float(each_m.group(1))
+            for number in nos:
+                assign(number, pts)
+            continue
+        if not total_m:
+            continue
+        total = float(total_m.group(1))
+        missing = [n for n in nos if by_no[n].score is None]
+        if not missing:
+            continue
+        used = sum(by_no[n].score or 0 for n in nos if by_no[n].score is not None)
+        leftover = total - used
+        if leftover <= 0:
+            continue
+        for number, pts in zip(missing, _distribute_points(leftover, len(missing))):
+            assign(number, pts)
 
 
 def extract_options(stem: str) -> tuple[str, list[ParsedOption]]:
@@ -348,6 +436,7 @@ def parse_markdown_paper(
             )
         )
     questions.sort(key=lambda q: q.sort_order)
+    apply_declared_scores(text, questions)
     return ParsedPaper(
         paper_code=(paper_code or _slug_code(filename)).strip() or _slug_code(filename),
         title=(title or Path(filename).stem).strip() or Path(filename).stem,
@@ -772,6 +861,43 @@ def list_papers(
     return rows
 
 
+def backfill_question_scores() -> dict[str, int]:
+    """Parse stored paper markdown and write declared scores onto questions."""
+    client = _client()
+    papers = (
+        client.table("papers")
+        .select("id,paper_code,title,source_filename,source_md")
+        .execute()
+    )
+    updated = 0
+    parsed_papers = 0
+    skipped = 0
+    for paper in papers.data or []:
+        md = paper.get("source_md") or ""
+        if not md.strip():
+            skipped += 1
+            continue
+        try:
+            parsed = parse_markdown_paper(
+                md,
+                filename=paper.get("source_filename") or "paper.md",
+                paper_code=paper.get("paper_code"),
+                title=paper.get("title"),
+            )
+        except ValueError:
+            skipped += 1
+            continue
+        parsed_papers += 1
+        for q in parsed.questions:
+            if q.score is None:
+                continue
+            client.table("questions").update({"score": q.score}).eq("paper_id", paper["id"]).eq(
+                "question_no", q.question_no
+            ).execute()
+            updated += 1
+    return {"papers": parsed_papers, "updated": updated, "skipped": skipped}
+
+
 def update_paper_meta(
     paper_id: str,
     *,
@@ -810,6 +936,68 @@ def update_paper_meta(
         .execute()
     )
     return row.data or {}
+
+
+def _remove_storage_keys(client, keys: list[str]) -> None:
+    if not keys:
+        return
+    try:
+        storage = client.storage.from_(BUCKET)
+        for chunk in _chunked(keys, 50):
+            storage.remove(chunk)
+    except Exception:
+        pass
+
+
+def delete_paper(paper_id: str) -> dict[str, Any]:
+    """Delete a paper and its questions, options, assets, and answer sheets."""
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise ValueError("无效的试卷 id")
+    client = _client()
+    found = (
+        client.table("papers")
+        .select("id,paper_code,title")
+        .eq("id", paper_id)
+        .limit(1)
+        .execute()
+    )
+    if not found.data:
+        raise ValueError("试卷不存在")
+    paper = found.data[0]
+    qres = (
+        client.table("questions")
+        .select("id")
+        .eq("paper_id", paper_id)
+        .execute()
+    )
+    question_ids = [row["id"] for row in (qres.data or []) if row.get("id")]
+    ares = (
+        client.table("assets")
+        .select("storage_key")
+        .eq("paper_id", paper_id)
+        .execute()
+    )
+    storage_keys = [
+        row["storage_key"] for row in (ares.data or []) if row.get("storage_key")
+    ]
+
+    for chunk in _chunked(question_ids):
+        client.table("answer_sheet_items").delete().in_("question_id", chunk).execute()
+        client.table("question_knowledge_points").delete().in_("question_id", chunk).execute()
+        client.table("question_options").delete().in_("question_id", chunk).execute()
+    client.table("answer_sheets").delete().eq("paper_id", paper_id).execute()
+    client.table("questions").delete().eq("paper_id", paper_id).execute()
+    _remove_storage_keys(client, storage_keys)
+    client.table("assets").delete().eq("paper_id", paper_id).execute()
+    client.table("papers").delete().eq("id", paper_id).execute()
+
+    return {
+        "paper_id": paper_id,
+        "paper_code": paper.get("paper_code"),
+        "title": paper.get("title"),
+        "question_count": len(question_ids),
+        "asset_count": len(storage_keys),
+    }
 
 
 def get_paper_questions(paper_id: str) -> dict[str, Any]:

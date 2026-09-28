@@ -26,6 +26,7 @@ from word_math_md.gaokao_docx_convert import (
 )
 from word_math_md.inspect import inspect_docx
 from word_math_md.ole_to_latex import convert_ole_docx, format_formula_list
+from word_math_md.batch_import import import_docx_pipeline, is_parsed_edition_docx
 from word_math_md.exam_bank import (
     PAPER_EXAM_TYPES,
     PAPER_GAOKAO_PAPERS,
@@ -40,6 +41,7 @@ from word_math_md.exam_bank import (
     list_animations_for_question,
     list_answer_sheets,
     list_knowledge_points,
+    delete_paper,
     list_papers,
     list_questions_by_knowledge,
     paper_filter_options,
@@ -108,6 +110,7 @@ WORK = Path(tempfile.gettempdir()) / "word-math-md-uploads"
 WORK.mkdir(parents=True, exist_ok=True)
 PREVIEWS = WORK / "previews"
 PREVIEWS.mkdir(parents=True, exist_ok=True)
+_PREVIEW_ROOTS: dict[str, Path] = {}
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -176,6 +179,7 @@ def build_paper_preview(paper_id: str) -> dict:
             continue
         item["question_id"] = dbq.get("id")
         item["type_code"] = dbq.get("type_code") or ""
+        item["score"] = dbq.get("score")
         item["knowledge_points"] = dbq.get("knowledge_points") or []
         item["knowledge_codes"] = dbq.get("knowledge_codes") or []
     return data
@@ -431,6 +435,7 @@ def index() -> str:
       color: #c5d0dc; font-size: 0.92rem;
     }}
     #result {{ white-space: pre-wrap; min-height: 80px; }}
+    #result pre {{ margin: 0; font: inherit; white-space: pre-wrap; }}
     #result.paper-view {{ white-space: normal; }}
     table.report {{
       width: 100%; border-collapse: collapse; margin: 10px 0 22px; font-size: 0.86rem;
@@ -476,6 +481,10 @@ def index() -> str:
       width: auto; min-width: 0; margin: 0; padding: 6px 12px;
       font-size: 0.82rem; font-weight: 600; background: #243140;
     }}
+    button.paper-delete-btn {{
+      background: #5a2430; border: 1px solid #7a3344;
+    }}
+    button.paper-delete-btn:hover {{ background: #6e2c3a; }}
     button.linkish {{
       width: auto; display: inline-block; padding: 8px 14px; margin-bottom: 10px;
       font-size: 0.85rem;
@@ -589,11 +598,39 @@ def index() -> str:
       vertical-align: middle; border-radius: 6px; border: 1px solid var(--line);
       background: #fff; margin: 4px 0;
     }}
+    .paper-masthead {{
+      text-align: center;
+      margin: 4px 0 18px;
+      line-height: 1.9;
+      font-size: 1.05rem;
+      color: var(--ink);
+    }}
+    .paper-masthead p {{ margin: 0.2em 0; }}
+    .paper-masthead img {{
+      max-width: 100%; max-height: 3.5rem; height: auto;
+      display: inline-block; vertical-align: middle; margin: 4px 0;
+    }}
+    .paper-section {{
+      margin: 0 0 22px;
+    }}
+    .paper-section-title {{
+      font-size: 0.98rem;
+      font-weight: 700;
+      line-height: 1.75;
+      margin: 0 0 12px;
+      padding: 10px 14px;
+      border-left: 3px solid var(--accent);
+      background: #1a222c;
+      border-radius: 8px;
+      color: var(--ink);
+    }}
+    .paper-section-title p {{ margin: 0.15em 0; }}
     .rich-content .katex {{ font-size: 1.05em; }}
     .rich-content .katex-display {{ margin: 8px 0; overflow-x: auto; }}
     .rich-content table {{ border-collapse: collapse; width: 100%; font-size: 0.86rem; }}
+    .rich-content .md-table-wrap {{ overflow-x: auto; margin: 8px 0; }}
     .rich-content th, .rich-content td {{
-      border: 1px solid var(--line); padding: 6px 8px; text-align: left;
+      border: 1px solid var(--line); padding: 6px 8px; text-align: center;
     }}
     @media screen {{
       .print-exam-title, .print-answer-space, .print-q-head {{ display: none; }}
@@ -636,6 +673,29 @@ def index() -> str:
         margin: 0 0 12mm;
         color: #111;
       }}
+      body.viewing-paper .paper-masthead {{
+        display: block !important;
+        text-align: center;
+        color: #111;
+        margin: 0 0 10mm;
+        font-size: 12pt;
+        line-height: 1.85;
+      }}
+      body.viewing-paper .paper-section-title {{
+        display: block !important;
+        background: none !important;
+        border: 0 !important;
+        padding: 0;
+        margin: 0 0 5mm;
+        font-size: 11.5pt;
+        font-weight: 700;
+        color: #111;
+        text-align: left;
+        line-height: 1.65;
+      }}
+      body.viewing-paper.has-paper-masthead .print-exam-title {{
+        display: none !important;
+      }}
       body.viewing-paper .print-q-head {{
         display: block !important;
         font-weight: 700;
@@ -649,6 +709,21 @@ def index() -> str:
       }}
       body.viewing-paper .print-stem {{
         color: #111; line-height: 1.65;
+      }}
+      body.viewing-paper .print-stem table,
+      body.viewing-paper .rich-content table {{
+        border-collapse: collapse;
+        width: 100%;
+        margin: 3mm 0;
+      }}
+      body.viewing-paper .print-stem th,
+      body.viewing-paper .print-stem td,
+      body.viewing-paper .rich-content th,
+      body.viewing-paper .rich-content td {{
+        border: 1px solid #111 !important;
+        padding: 2mm 3mm;
+        text-align: center;
+        color: #111;
       }}
       body.viewing-paper .print-stem img,
       body.viewing-paper .rich-content img {{
@@ -665,7 +740,7 @@ def index() -> str:
       }}
       body.viewing-paper .print-answer-space {{
         display: block !important;
-        height: 148.5mm;
+        height: 297mm;
       }}
       body.viewing-paper #vsDialog {{
         display: none !important;
@@ -709,6 +784,7 @@ def index() -> str:
       </div>
       <div class="btn-row">
         <button type="button" class="secondary" id="btnImportMd">导入 Markdown 到题库</button>
+        <button type="button" class="secondary" id="btnBatchImport">批量导入试卷</button>
         <button type="button" class="secondary" id="btnListPapers">查看已入库试卷</button>
         <button type="button" class="secondary" id="btnKpAdmin">维护知识点</button>
         <button type="button" class="secondary" id="btnPractice">知识点专项训练</button>
@@ -716,8 +792,9 @@ def index() -> str:
     </form>
     <input type="file" id="mdFile" accept=".md,.markdown,.mdown,text/markdown,text/plain" hidden />
     <input type="file" id="importMdFile" accept=".md,.markdown,.mdown,text/markdown,text/plain" hidden />
+    <input type="file" id="batchFolder" webkitdirectory directory multiple hidden />
     <p id="bankStatus" class="lead no-print"></p>
-    <div id="result">选择 .docx 后可转换或分析。点「上传markdown并显示题目」可预览；「导入 Markdown 到题库」会按题号写入 Supabase。</div>
+    <div id="result">选择 .docx 后可转换或分析。点「上传markdown并显示题目」可预览；「导入 Markdown 到题库」会按题号写入 Supabase。「批量导入试卷」会选择文件夹，自动处理其中带「解析版」的 Word。</div>
     <div id="analysis" class="no-print" hidden></div>
     <div id="questions" hidden></div>
     <div id="vsDialog" hidden>
@@ -788,7 +865,7 @@ def index() -> str:
         </div>
       </div>
     </div>
-    <footer class="no-print">API: POST /api/convert · POST /api/exam-bank/import-markdown · GET /api/exam-bank/papers · POST /api/exam-bank/papers/&#123;id&#125;/grade-sheet · v{__version__}</footer>
+    <footer class="no-print">API: POST /api/convert · POST /api/exam-bank/import-markdown · POST /api/exam-bank/import-docx · GET /api/exam-bank/papers · POST /api/exam-bank/papers/&#123;id&#125;/grade-sheet · v{__version__}</footer>
   </main>
   <script>
     const f = document.getElementById('f');
@@ -800,6 +877,7 @@ def index() -> str:
     const btnOle = document.getElementById('btnOle');
     const btnParseMd = document.getElementById('btnParseMd');
     const btnImportMd = document.getElementById('btnImportMd');
+    const btnBatchImport = document.getElementById('btnBatchImport');
     const btnListPapers = document.getElementById('btnListPapers');
     const btnKpAdmin = document.getElementById('btnKpAdmin');
     if (btnKpAdmin) btnKpAdmin.addEventListener('click', () => {{ location.href = '/knowledge'; }});
@@ -808,9 +886,16 @@ def index() -> str:
     const oleFile = document.getElementById('oleFile');
     const mdFile = document.getElementById('mdFile');
     const importMdFile = document.getElementById('importMdFile');
+    const batchFolder = document.getElementById('batchFolder');
     const questions = document.getElementById('questions');
     function esc(s) {{
       return String(s ?? '').replace(/[&<>]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;'}}[c]));
+    }}
+    function formatScore(v) {{
+      if (v == null || v === '') return '';
+      const n = Number(v);
+      if (!Number.isFinite(n)) return '';
+      return Number.isInteger(n) ? String(n) : String(n);
     }}
     const PAPER_SEMESTERS = {json.dumps(list(PAPER_SEMESTERS), ensure_ascii=False)};
     const PAPER_EXAM_TYPES = {json.dumps(list(PAPER_EXAM_TYPES), ensure_ascii=False)};
@@ -1062,6 +1147,56 @@ def index() -> str:
       if (/_{3,}|(?:\\\\_){{3,}}|填空/.test(text)) return 'fill_blank';
       return 'solution';
     }}
+    function fallbackTypeLabel(code) {{
+      if (code === 'multi_choice') return '二、多项选择题';
+      if (code === 'fill_blank') return '三、填空题';
+      if (code === 'solution') return '四、解答题';
+      if (code === 'single_choice') return '一、单项选择题';
+      return '';
+    }}
+    function groupPaperQuestions(data) {{
+      const qs = data.questions || [];
+      const byNo = {{}};
+      qs.forEach((q, i) => {{ byNo[String(q.index)] = {{ q: q, i: i }}; }});
+      const groups = [];
+      const used = new Set();
+      (data.sections || []).forEach(function(s) {{
+        const items = [];
+        (s.questionIndexes || []).forEach(function(n) {{
+          const hit = byNo[String(n)];
+          if (!hit || used.has(hit.i)) return;
+          used.add(hit.i);
+          items.push(hit);
+        }});
+        if (!items.length) return;
+        groups.push({{
+          titleHtml: s.titleHtml || '',
+          title: s.title || '',
+          items: items,
+        }});
+      }});
+      const rest = qs.map((q, i) => ({{ q: q, i: i }})).filter(hit => !used.has(hit.i));
+      if (!rest.length) return groups;
+      if (groups.length) {{
+        groups.push({{ titleHtml: '', title: '', items: rest }});
+        return groups;
+      }}
+      const buckets = {{}};
+      rest.forEach(function(hit) {{
+        const code = hit.q.type_code || questionTypeCode(hit.q) || '';
+        if (!buckets[code]) buckets[code] = [];
+        buckets[code].push(hit);
+      }});
+      ['single_choice', 'multi_choice', 'fill_blank', 'solution'].forEach(function(code) {{
+        if (!buckets[code] || !buckets[code].length) return;
+        groups.push({{ titleHtml: '', title: fallbackTypeLabel(code), items: buckets[code] }});
+        delete buckets[code];
+      }});
+      Object.keys(buckets).forEach(function(code) {{
+        groups.push({{ titleHtml: '', title: fallbackTypeLabel(code), items: buckets[code] }});
+      }});
+      return groups;
+    }}
     function eagerImages(html) {{
       return String(html || '').replace(/<img\\b([^>]*)>/gi, function(_, attrs) {{
         var a = String(attrs || '');
@@ -1071,7 +1206,7 @@ def index() -> str:
       }});
     }}
     function waitForPrintImages() {{
-      const imgs = Array.from(document.querySelectorAll('.print-stem img'));
+      const imgs = Array.from(document.querySelectorAll('.print-stem img, .paper-masthead img'));
       return Promise.all(imgs.map(function(img) {{
         img.loading = 'eager';
         if (img.complete) return Promise.resolve();
@@ -1088,36 +1223,51 @@ def index() -> str:
       const notices = data.notices || [];
       let html = '';
       if (paper) {{
-        const metaBits = [paper.semester, paper.exam_type].filter(Boolean).join(' · ');
+        const metaBits = [paper.semester, paper.exam_type, paper.province, paper.gaokao_paper].filter(Boolean).join(' · ');
+        const totalScore = qs.reduce((s, q) => s + (Number(q.score) || 0), 0);
         const heading = esc(paper.title || paper.paper_code || '试卷') +
           (paper.paper_code ? ' · 编号 ' + esc(paper.paper_code) : '') +
           (metaBits ? ' · ' + esc(metaBits) : '') +
-          ' · 共 ' + qs.length + ' 题';
+          ' · 共 ' + qs.length + ' 题' +
+          (totalScore ? ' · 满分 ' + formatScore(totalScore) + ' 分' : '');
         html += '<div class="paper-preview-bar no-print" id="paperPreviewBar">' +
           '<button type="button" class="secondary" id="btnBackPapers">返回试卷列表</button>' +
           '<button type="button" id="btnPrintPaper">打印试卷</button>' +
           '<button type="button" class="secondary" id="btnUploadSheetPreview" data-upload-sheet data-paper-id="' +
           esc(paper.id || '') + '" data-paper-title="' + esc(paper.title || paper.paper_code || '') +
           '">上传答卷评分</button>' +
+          '<button type="button" class="paper-delete-btn" data-delete-paper data-paper-id="' +
+          esc(paper.id || '') + '" data-paper-title="' + esc(paper.title || paper.paper_code || '') +
+          '">删除试卷</button>' +
           '</div>';
         html += '<div class="print-paper-title no-print">' + heading + '</div>';
         html += '<h1 class="print-exam-title">' + esc(examPrintTitle(paper)) + '</h1>';
       }}
-      html += notices.map(n => '<p class="summary">' + esc(n.text) + '</p>').join('');
+      if (data.headerHtml) {{
+        html += '<div class="paper-masthead">' + eagerImages(data.headerHtml) + '</div>';
+        document.body.classList.add('has-paper-masthead');
+      }} else {{
+        document.body.classList.remove('has-paper-masthead');
+      }}
+      if (!paper) {{
+        html += notices.map(n => '<p class="summary">' + esc(n.text) + '</p>').join('');
+      }}
       if (!qs.length) {{
         html += '<p>未能解析出题目，请检查题号与【答案】【分析】【详解】标记。</p>';
         questions.innerHTML = html;
         questions.hidden = false;
         return;
       }}
-      html += qs.map((q, qi) => {{
+      function renderQuestionCard(q, qi) {{
         let card = '<article class="q-card"><div class="q-meta">';
         card += '<span class="chip">第 ' + esc(q.index) + ' 题</span>';
+        if (formatScore(q.score)) card += '<span class="chip">' + esc(formatScore(q.score)) + ' 分</span>';
         card += q.answerHtml ? '<span class="chip ok">含答案</span>' : '<span class="chip warn">缺答案</span>';
         if (q.analysisHtml) card += '<span class="chip">含分析</span>';
         if (q.detailHtml) card += '<span class="chip">含详解</span>';
         card += '</div><h3 class="no-print">题干</h3>';
-        card += '<div class="print-q-head">' + esc(q.index) + '.</div>';
+        card += '<div class="print-q-head">' + esc(q.index) + '.' +
+          (formatScore(q.score) ? '（' + esc(formatScore(q.score)) + '分）' : '') + '</div>';
         card += '<div class="rich-content print-stem">' + eagerImages(q.stemHtml || '') + '</div>';
         if (questionTypeCode(q) === 'solution') {{
           card += '<div class="print-answer-space"></div>';
@@ -1147,6 +1297,19 @@ def index() -> str:
         }}
         card += '</article>';
         return card;
+      }}
+      html += groupPaperQuestions(data).map(function(group) {{
+        let block = '<section class="paper-section">';
+        if (group.titleHtml) {{
+          block += '<div class="paper-section-title">' + eagerImages(group.titleHtml) + '</div>';
+        }} else if (group.title) {{
+          block += '<div class="paper-section-title">' + esc(group.title) + '</div>';
+        }}
+        block += group.items.map(function(hit) {{
+          return renderQuestionCard(hit.q, hit.i);
+        }}).join('');
+        block += '</section>';
+        return block;
       }}).join('');
       questions.innerHTML = html;
       questions.hidden = false;
@@ -1232,8 +1395,84 @@ def index() -> str:
         await runImportMarkdown(importMdFile.files[0]);
       }}
     }});
-    async function listBankPapers() {{
-      document.body.classList.remove('viewing-paper');
+    function isParsedEditionDocx(name) {{
+      const base = String(name || '').replace(/\\\\/g, '/').split('/').pop() || '';
+      if (!/\\.docx$/i.test(base) || base.startsWith('~$')) return false;
+      if (base.indexOf('解析版') < 0) return false;
+      if (/\\.ole-latex/i.test(base) || /\\.preprocessed/i.test(base)) return false;
+      return true;
+    }}
+    function setBatchBusy(busy) {{
+      [btnBatchImport, btnImportMd, btnListPapers, btn, btnOle, btnPreprocess, btnParseMd].forEach(el => {{
+        if (el) el.disabled = busy;
+      }});
+    }}
+    async function runBatchImport(fileList) {{
+      const files = Array.from(fileList || []).filter(f =>
+        isParsedEditionDocx(f.webkitRelativePath || f.name)
+      );
+      files.sort((a, b) => String(a.webkitRelativePath || a.name)
+        .localeCompare(String(b.webkitRelativePath || b.name), 'zh'));
+      questions.hidden = true;
+      questions.innerHTML = '';
+      analysis.hidden = true;
+      if (!files.length) {{
+        result.textContent = '该文件夹里没有带「解析版」的 .docx（已跳过 ole-latex / preprocessed 中间文件）。';
+        return;
+      }}
+      setBatchBusy(true);
+      const province = document.getElementById('paperProvince').value.trim();
+      const gaokao = document.getElementById('paperGaokao').value.trim();
+      const lines = ['准备导入 ' + files.length + ' 份解析版试卷（OLE转LaTeX → 格式预处理 → 转Markdown → 入库）。'];
+      result.innerHTML = '<pre>' + esc(lines.join('\\n')) + '</pre>';
+      let ok = 0;
+      let fail = 0;
+      for (let i = 0; i < files.length; i++) {{
+        const file = files[i];
+        const label = (file.webkitRelativePath || file.name).replace(/\\\\/g, '/');
+        lines.push('');
+        lines.push('(' + (i + 1) + '/' + files.length + ') ' + label);
+        lines.push('  OLE公式转Latex → 格式预处理 → word转换md → 导入题库…');
+        result.innerHTML = '<pre>' + esc(lines.join('\\n')) + '</pre>';
+        const fd = new FormData();
+        fd.append('file', file, file.name);
+        if (province) fd.append('province', province);
+        if (gaokao) fd.append('gaokao_paper', gaokao);
+        try {{
+          const res = await fetch('/api/exam-bank/import-docx', {{ method: 'POST', body: fd }});
+          const data = await readJson(res);
+          if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+          ok += 1;
+          lines[lines.length - 1] =
+            '  完成：' + (data.replaced ? '覆盖' : '新建') +
+            ' ' + (data.paper_code || '') +
+            ' · ' + (data.question_count || 0) + ' 题' +
+            ' · OLE公式 ' + (data.ole_formulas || 0) +
+            ' · 公式转换 ' + (data.math_converted || 0);
+        }} catch (err) {{
+          fail += 1;
+          lines[lines.length - 1] = '  失败：' + err.message;
+        }}
+        result.innerHTML = '<pre>' + esc(lines.join('\\n')) + '</pre>';
+      }}
+      lines.push('');
+      lines.push('全部结束：成功 ' + ok + '，失败 ' + fail + '。');
+      result.innerHTML = '<pre>' + esc(lines.join('\\n')) + '</pre>';
+      setBatchBusy(false);
+    }}
+    if (btnBatchImport && batchFolder) {{
+      btnBatchImport.addEventListener('click', () => {{
+        batchFolder.value = '';
+        batchFolder.click();
+      }});
+      batchFolder.addEventListener('change', async () => {{
+        if (batchFolder.files && batchFolder.files.length) {{
+          await runBatchImport(batchFolder.files);
+        }}
+      }});
+    }}
+    async function listBankPapers(statusText) {{
+      document.body.classList.remove('viewing-paper', 'has-paper-masthead');
       result.classList.remove('paper-view');
       btnListPapers.disabled = true;
       const province = (document.getElementById('paperListProvince') || {{}}).value || '';
@@ -1246,7 +1485,7 @@ def index() -> str:
         const data = await readJson(res);
         if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
         const rows = data.papers || [];
-        result.textContent = '题库中共 ' + rows.length + ' 套试卷。';
+        result.textContent = statusText || ('题库中共 ' + rows.length + ' 套试卷。');
         const filterBar = '<div class="paper-filter-bar">' +
           '<select id="paperListProvince"></select>' +
           '<select id="paperListGaokao"></select>' +
@@ -1269,6 +1508,9 @@ def index() -> str:
           '<button type="button" class="paper-action-btn" data-upload-sheet data-paper-id="' +
           esc(p.id) + '" data-paper-title="' + esc(p.title || p.paper_code || '') +
           '">上传答卷</button>' +
+          '<button type="button" class="paper-action-btn paper-delete-btn" data-delete-paper data-paper-id="' +
+          esc(p.id) + '" data-paper-title="' + esc(p.title || p.paper_code || '') +
+          '">删除</button>' +
           '</div></article>'
         ).join('') || '<p>题库还是空的。</p>');
         fillNamedSelect(document.getElementById('paperListProvince'), PAPER_PROVINCES, '全部省份', province);
@@ -1281,6 +1523,25 @@ def index() -> str:
       }}
     }}
     btnListPapers.addEventListener('click', () => listBankPapers());
+    async function deleteBankPaper(paperId, title, btn) {{
+      const label = title || '该试卷';
+      if (!paperId) return;
+      if (!confirm('确定删除试卷「' + label + '」及其全部题目、配图和答卷记录？此操作不可恢复。')) return;
+      if (btn) btn.disabled = true;
+      result.textContent = '正在删除试卷…';
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(paperId), {{
+          method: 'DELETE',
+        }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const n = data.question_count != null ? data.question_count : 0;
+        await listBankPapers('已删除试卷「' + (data.title || label) + '」及 ' + n + ' 道题目。');
+      }} catch (err) {{
+        result.textContent = '删除试卷失败: ' + err.message;
+        if (btn) btn.disabled = false;
+      }}
+    }}
     async function openBankPaper(paperId) {{
       btnListPapers.disabled = true;
       analysis.innerHTML = '';
@@ -1298,7 +1559,7 @@ def index() -> str:
         const bar = document.getElementById('paperPreviewBar');
         if (bar) bar.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
       }} catch (err) {{
-        document.body.classList.remove('viewing-paper');
+        document.body.classList.remove('viewing-paper', 'has-paper-masthead');
         result.classList.remove('paper-view');
         result.textContent = '读取试卷失败: ' + err.message;
         questions.innerHTML = '';
@@ -1323,6 +1584,17 @@ def index() -> str:
         ev.preventDefault();
         ev.stopPropagation();
         btnListPapers.click();
+        return;
+      }}
+      const deleteBtn = ev.target.closest('[data-delete-paper]');
+      if (deleteBtn && questions.contains(deleteBtn)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        deleteBankPaper(
+          deleteBtn.getAttribute('data-paper-id'),
+          deleteBtn.getAttribute('data-paper-title') || '',
+          deleteBtn
+        );
         return;
       }}
       const uploadBtn = ev.target.closest('[data-upload-sheet]');
@@ -1962,6 +2234,44 @@ async def api_import_markdown(
     return JSONResponse(data)
 
 
+@app.post("/api/exam-bank/import-docx")
+async def api_import_docx(
+    file: UploadFile = File(...),
+    paper_title: str | None = Form(None),
+    province: str | None = Form(None),
+    gaokao_paper: str | None = Form(None),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(
+            503,
+            "未配置 Supabase。请先运行 python scripts/setup_supabase.py，或在 .env 填写 SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY。",
+        )
+    name = Path(file.filename or "").name
+    if not is_parsed_edition_docx(name):
+        raise HTTPException(400, "请选择带「解析版」关键字的原始 .docx（不要选 ole-latex / preprocessed 中间文件）。")
+    job = f"batch_{os.getpid()}_{re.sub(r'[^A-Za-z0-9_\\-]+', '_', Path(name).stem)[:40]}"
+    dest = WORK / "batch" / job
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    src = dest / name
+    src.write_bytes(await file.read())
+    try:
+        data = import_docx_pipeline(
+            src,
+            work_dir=dest / "out",
+            title=paper_title,
+            province=province,
+            gaokao_paper=gaokao_paper,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    data["ok"] = True
+    return JSONResponse(data)
+
+
 @app.get("/api/exam-bank/papers")
 def api_list_papers(
     province: str | None = None,
@@ -2006,6 +2316,26 @@ def api_update_paper_meta(paper_id: str, body: PaperMetaIn) -> JSONResponse:
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
     return JSONResponse({"ok": True, "paper": paper})
+
+
+@app.delete("/api/exam-bank/papers/{paper_id}")
+def api_delete_paper(paper_id: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise HTTPException(400, "无效的试卷 id")
+    try:
+        deleted = delete_paper(paper_id)
+    except ValueError as exc:
+        msg = str(exc)
+        raise HTTPException(404 if "不存在" in msg else 400, msg) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    dest = WORK / "preview-bank" / paper_id
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    _PREVIEW_ROOTS.pop(paper_id, None)
+    return JSONResponse({"ok": True, **deleted})
 
 
 class QuestionsByKnowledgeIn(BaseModel):
@@ -2096,6 +2426,7 @@ def api_practice_preview(body: PracticePreviewIn) -> JSONResponse:
             continue
         item["question_id"] = dbq.get("id")
         item["type_code"] = dbq.get("type_code") or ""
+        item["score"] = dbq.get("score")
         item["knowledge_points"] = dbq.get("knowledge_points") or []
         item["knowledge_codes"] = dbq.get("knowledge_codes") or []
         item["paper_title"] = dbq.get("paper_title") or ""
@@ -2874,6 +3205,7 @@ def api_app_practice_preview(
             continue
         item["question_id"] = dbq.get("id")
         item["type_code"] = dbq.get("type_code") or ""
+        item["score"] = dbq.get("score")
         item["knowledge_points"] = dbq.get("knowledge_points") or []
         item["paper_title"] = dbq.get("paper_title") or ""
         item["source_question_no"] = dbq.get("source_question_no")

@@ -114,6 +114,11 @@ def rewrite_html_assets(html: str) -> str:
 
 def rewrite_preview_payload(data: dict[str, Any]) -> dict[str, Any]:
     out = dict(data)
+    if out.get("headerHtml"):
+        out["headerHtml"] = rewrite_html_assets(out["headerHtml"])
+    for section in out.get("sections") or []:
+        if section.get("titleHtml"):
+            section["titleHtml"] = rewrite_html_assets(section["titleHtml"])
     for q in out.get("questions") or []:
         for key in ("stemHtml", "answerHtml", "analysisHtml", "detailHtml"):
             if q.get(key):

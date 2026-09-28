@@ -27,11 +27,21 @@ export interface ParseNotice {
   text: string;
 }
 
+export interface PaperTypeSection {
+  title: string;
+  titleHtml: string;
+  typeHint: string;
+  questionIndexes: number[];
+}
+
 export interface ParseMarkdownResult {
   questions: ImportedQuestion[];
   notices: ParseNotice[];
   warnings: string[];
   unresolvedImages: string[];
+  headerHtml: string;
+  headerText: string;
+  sections: PaperTypeSection[];
 }
 
 function uid(prefix: string): string {
@@ -367,11 +377,14 @@ export function markdownFragmentToHtml(
   });
   s = s.replace(/<br\s*\/?>/gi, () => park("<br/>"));
 
-  // 5) GFM 表格
-  s = s.replace(/(?:^|\n)((?:\|[^\n]*\|\n)+)/g, (full, tableBlock: string) => {
-    const prefix = full.startsWith("\n") ? "\n" : "";
-    return prefix + park(renderMarkdownTable(tableBlock));
-  });
+  // 5) GFM 表格（最后一行可以没有换行）
+  s = s.replace(
+    /(?:^|\n)((?:\|[^\n]*\|[ \t]*(?:\n|$))+)/g,
+    (full, tableBlock: string) => {
+      const prefix = full.startsWith("\n") ? "\n" : "";
+      return prefix + park(renderMarkdownTable(tableBlock));
+    },
+  );
 
   // 6) 标题（标题内公式已 park）
   s = s.replace(/^(#{1,4})\s+(.+)$/gm, (_m, hashes: string, title: string) => {
@@ -465,13 +478,89 @@ function normalizeMarkdown(raw: string): string {
   ).trim();
 }
 
+const TYPE_SECTION_LABELS =
+  "单项选择题|多项选择题|单项选择|多项选择|单选题|多选题|选择题|填空题|解答题";
+const TYPE_SECTION_LINE_RE = new RegExp(
+  `^(?:#{1,6}\\s*)?(?:\\*{0,2})\\s*[一二三四五六七八九十][、､.．]\\s*(?:${TYPE_SECTION_LABELS})`,
+);
+const TYPE_SECTION_HEADER_RE = new RegExp(
+  `(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*{0,2})\\s*([一二三四五六七八九十])[、､.．]\\s*(${TYPE_SECTION_LABELS})([^\\n]{0,400})`,
+  "g",
+);
+
+function typeHintFromLabel(label: string): string {
+  if (/多项|多选/.test(label)) return "multi_choice";
+  if (/填空/.test(label)) return "fill_blank";
+  if (/解答/.test(label)) return "solution";
+  if (/选择/.test(label)) return "single_choice";
+  return "";
+}
+
+function cleanSectionTitle(raw: string): string {
+  return raw
+    .replace(/^#+\s*/, "")
+    .replace(/^\*{1,2}/, "")
+    .replace(/\*{1,2}$/, "")
+    .replace(/\*+$/, "")
+    .trim();
+}
+
+function findTypeSectionHeaders(
+  text: string,
+): Array<{ start: number; title: string; label: string }> {
+  const out: Array<{ start: number; title: string; label: string }> = [];
+  const re = new RegExp(TYPE_SECTION_HEADER_RE.source, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    let start = m.index + (m[0].startsWith("\n") ? 1 : 0);
+    while (start < text.length && (text[start] === "\n" || text[start] === "\r")) {
+      start += 1;
+    }
+    const nl = text.indexOf("\n", start);
+    const lineEnd = nl === -1 ? text.length : nl;
+    const title = cleanSectionTitle(text.slice(start, lineEnd));
+    if (!title) continue;
+    out.push({ start, title, label: m[2] || "" });
+  }
+  return out;
+}
+
+/**
+ * 卷首校名、科目、考试时间等，不再并入第 1 题题干。
+ * 去掉页眉水印行；题型导语（一、选择题…）单独成栏，不放进卷头。
+ */
+function extractPaperHeader(preamble: string): string {
+  const lines = preamble.replace(/\r\n/g, "\n").split("\n");
+  const kept: string[] = [];
+  let started = false;
+  for (const raw of lines) {
+    const plain = raw
+      .trim()
+      .replace(/^#+\s*/, "")
+      .replace(/^\*+|\*+$/g, "")
+      .trim();
+    if (!plain) {
+      if (started) kept.push("");
+      continue;
+    }
+    if (/^(学科网|机密|内部资料|www\.)/i.test(plain)) continue;
+    if (TYPE_SECTION_LINE_RE.test(plain) || TYPE_SECTION_LINE_RE.test(raw.trim())) break;
+    started = true;
+    kept.push(raw.trimEnd());
+  }
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /**
  * 按大题题号拆分。
  * 只用「1. / 1． / 1、 / 第1题 / ## 1.」，不用「（1）」——后者是小题，误用会丢掉答案/详解。
  */
 function splitByQuestionNumber(
   text: string,
-): Array<{ index: number; body: string }> {
+): {
+  chunks: Array<{ index: number; body: string; start: number }>;
+  preamble: string;
+} {
   // 大题：1. / 1\. / 1． / 1、 / 第1题 / 第 1 题
   // 不用 （1）/(1)，避免把解答题小题当成新大题
   const re =
@@ -485,7 +574,7 @@ function splitByQuestionNumber(
       bodyStart: m.index + m[0].length,
     });
   }
-  if (hits.length === 0) return [];
+  if (hits.length === 0) return { chunks: [], preamble: "" };
 
   /** 取从 startExpect 起的连续题号链 */
   const takeChain = (startExpect: number) => {
@@ -511,23 +600,51 @@ function splitByQuestionNumber(
       if (chain.length > filtered.length) filtered = chain;
     }
   }
-  if (filtered.length === 0) return [];
+  if (filtered.length === 0) return { chunks: [], preamble: "" };
 
-  const out: Array<{ index: number; body: string }> = [];
+  const headers = findTypeSectionHeaders(text);
+  const preamble =
+    filtered[0].start > 0 ? text.slice(0, filtered[0].start).trim() : "";
+  const out: Array<{ index: number; body: string; start: number }> = [];
   for (let i = 0; i < filtered.length; i++) {
-    const end = i + 1 < filtered.length ? filtered[i + 1].start : text.length;
-    let body = text.slice(filtered[i].bodyStart, end).trim();
-    // 卷首残留（上一题尾巴）并入第 1 道识别到的题之前：仅当这是链首且前面还有内容
-    if (i === 0 && filtered[i].start > 0) {
-      const preamble = text.slice(0, filtered[i].start).trim();
-      // 短卷首（页眉等）忽略；较长残片并入本题，避免信息丢失
-      if (preamble.length >= 40 && !/^学科网|^机密|^注意事项/.test(preamble)) {
-        body = `${preamble}\n\n${body}`.trim();
-      }
+    let end = i + 1 < filtered.length ? filtered[i + 1].start : text.length;
+    const nextHeader = headers.find(
+      (h) => h.start > filtered[i].start && h.start < end,
+    );
+    if (nextHeader) end = nextHeader.start;
+    const body = text.slice(filtered[i].bodyStart, end).trim();
+    if (body) {
+      out.push({
+        index: filtered[i].index,
+        body,
+        start: filtered[i].start,
+      });
     }
-    if (body) out.push({ index: filtered[i].index, body });
   }
-  return out;
+  return { chunks: out, preamble };
+}
+
+function buildTypeSections(
+  text: string,
+  chunks: Array<{ index: number; start: number }>,
+  toHtml: (md: string) => string,
+): PaperTypeSection[] {
+  const headers = findTypeSectionHeaders(text);
+  if (!headers.length) return [];
+  return headers
+    .map((header, i) => {
+      const end = i + 1 < headers.length ? headers[i + 1].start : Number.POSITIVE_INFINITY;
+      const questionIndexes = chunks
+        .filter((chunk) => chunk.start > header.start && chunk.start < end)
+        .map((chunk) => chunk.index);
+      return {
+        title: header.title,
+        titleHtml: toHtml(header.title),
+        typeHint: typeHintFromLabel(header.label),
+        questionIndexes,
+      };
+    })
+    .filter((section) => section.questionIndexes.length > 0);
 }
 
 /**
@@ -548,10 +665,16 @@ export function parseMarkdownPaper(
       notices,
       warnings: notices.map((n) => n.text),
       unresolvedImages,
+      headerHtml: "",
+      headerText: "",
+      sections: [],
     };
   }
 
-  const chunks = splitByQuestionNumber(text);
+  const { chunks, preamble } = splitByQuestionNumber(text);
+  const toHtml = (md: string) => markdownFragmentToHtml(md, assets, unresolvedImages);
+  const headerText = extractPaperHeader(preamble);
+  const headerHtml = headerText ? toHtml(headerText) : "";
   if (chunks.length === 0) {
     notices.push({
       level: "warn",
@@ -562,13 +685,14 @@ export function parseMarkdownPaper(
       notices,
       warnings: notices.map((n) => n.text),
       unresolvedImages,
+      headerHtml,
+      headerText,
+      sections: [],
     };
   }
 
   let formulaHint = 0;
   let imageHint = 0;
-
-  const toHtml = (md: string) => markdownFragmentToHtml(md, assets, unresolvedImages);
 
   const questions: ImportedQuestion[] = chunks.map((chunk) => {
     const sections = splitSections(chunk.body);
@@ -635,11 +759,16 @@ export function parseMarkdownPaper(
     });
   }
 
+  const typeSections = buildTypeSections(text, chunks, toHtml);
+
   return {
     questions,
     notices,
     warnings: notices.map((n) => n.text),
     unresolvedImages: uniqueMissing,
+    headerHtml,
+    headerText,
+    sections: typeSections,
   };
 }
 
@@ -673,6 +802,9 @@ export async function parseMarkdownFiles(
       ],
       warnings: ["未找到 Markdown 文件"],
       unresolvedImages: [],
+      headerHtml: "",
+      headerText: "",
+      sections: [],
     };
   }
 

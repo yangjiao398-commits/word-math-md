@@ -11,6 +11,10 @@ def test_word_set_builder_renders_with_katex():
     _run_tsx(ROOT / "tests" / "test_latex_normalize.mts")
 
 
+def test_word_tables_keep_grid_in_markdown():
+    _run_tsx(ROOT / "tests" / "test_table_markdown.mts")
+
+
 def test_parse_broken_set_builder_markdown():
     data = parse_markdown_like_gaokao(
         ROOT / "tests" / "fixtures" / "set_builder_broken.md"

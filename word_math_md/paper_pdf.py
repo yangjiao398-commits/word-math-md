@@ -55,6 +55,84 @@ def _eager_images(markup: str) -> str:
     return _IMG_TAG.sub(_repl, markup or "")
 
 
+_TYPE_SECTION_FALLBACK = (
+    ("single_choice", "一、单项选择题"),
+    ("multi_choice", "二、多项选择题"),
+    ("fill_blank", "三、填空题"),
+    ("solution", "四、解答题"),
+)
+
+
+def _group_questions(data: dict[str, Any]) -> list[dict[str, Any]]:
+    questions = list(data.get("questions") or [])
+    by_no: dict[str, dict[str, Any]] = {}
+    for i, raw in enumerate(questions):
+        q = raw if isinstance(raw, dict) else {}
+        by_no[str(q.get("index") if q.get("index") is not None else i + 1)] = {
+            "q": q,
+            "i": i,
+        }
+    used: set[int] = set()
+    groups: list[dict[str, Any]] = []
+    for section in data.get("sections") or []:
+        if not isinstance(section, dict):
+            continue
+        items = []
+        for number in section.get("questionIndexes") or []:
+            hit = by_no.get(str(number))
+            if not hit or hit["i"] in used:
+                continue
+            used.add(hit["i"])
+            items.append(hit)
+        if not items:
+            continue
+        groups.append(
+            {
+                "title": str(section.get("title") or ""),
+                "titleHtml": str(section.get("titleHtml") or ""),
+                "items": items,
+            }
+        )
+    rest = [
+        {"q": raw if isinstance(raw, dict) else {}, "i": i}
+        for i, raw in enumerate(questions)
+        if i not in used
+    ]
+    if not rest:
+        return groups
+    if groups:
+        groups.append({"title": "", "titleHtml": "", "items": rest})
+        return groups
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for hit in rest:
+        code = str(hit["q"].get("type_code") or "")
+        buckets.setdefault(code, []).append(hit)
+    for code, title in _TYPE_SECTION_FALLBACK:
+        items = buckets.pop(code, None)
+        if items:
+            groups.append({"title": title, "titleHtml": "", "items": items})
+    for code, items in buckets.items():
+        label = dict(_TYPE_SECTION_FALLBACK).get(code, "")
+        groups.append({"title": label, "titleHtml": "", "items": items})
+    return groups
+
+
+def _question_card(q: dict[str, Any], fallback_index: int) -> str:
+    index = q.get("index") if q.get("index") is not None else fallback_index
+    stem = _eager_images(rewrite_html_assets(str(q.get("stemHtml") or "")))
+    score = q.get("score")
+    try:
+        score_n = float(score)
+        score_txt = str(int(score_n)) if score_n == int(score_n) else str(score_n)
+        qno = f"{_esc(index)}.（{_esc(score_txt)}分）"
+    except (TypeError, ValueError):
+        qno = f"{_esc(index)}."
+    return (
+        f'<article class="q-card"><div class="q-no">{qno}</div>'
+        f'<div class="rich-content">{stem}</div></article>'
+    )
+
+
 def paper_stem_html(data: dict[str, Any]) -> str:
     paper = data.get("paper") or {}
     questions = data.get("questions") or []
@@ -74,16 +152,35 @@ def paper_stem_html(data: dict[str, Any]) -> str:
         heading += f" · {_esc(meta_bits)}"
     heading += f" · 共 {len(questions)} 题"
     css = f"{app_public_origin()}/vendor/katex/katex.min.css"
-    cards = []
-    for i, raw in enumerate(questions):
-        q = raw if isinstance(raw, dict) else {}
-        index = q.get("index") if q.get("index") is not None else i + 1
-        stem = _eager_images(rewrite_html_assets(str(q.get("stemHtml") or "")))
-        cards.append(
-            f'<article class="q-card"><div class="q-no">{_esc(index)}.</div>'
-            f'<div class="rich-content">{stem}</div></article>'
-        )
-    body = "\n".join(cards) or "<p>未能解析出题目。</p>"
+    parts: list[str] = []
+    groups = _group_questions(data)
+    if not groups and not questions:
+        parts.append("<p>未能解析出题目。</p>")
+    for group in groups:
+        heading_html = str(group.get("titleHtml") or "").strip()
+        title_text = str(group.get("title") or "").strip()
+        block = ['<section class="paper-section">']
+        if heading_html:
+            block.append(
+                f'<div class="paper-section-title">{_eager_images(rewrite_html_assets(heading_html))}</div>'
+            )
+        elif title_text:
+            block.append(f'<div class="paper-section-title">{_esc(title_text)}</div>')
+        for hit in group.get("items") or []:
+            q = hit.get("q") if isinstance(hit, dict) else {}
+            i = hit.get("i") if isinstance(hit, dict) else 0
+            if not isinstance(q, dict):
+                q = {}
+            block.append(_question_card(q, int(i or 0) + 1))
+        block.append("</section>")
+        parts.append("\n".join(block))
+    body = "\n".join(parts) or "<p>未能解析出题目。</p>"
+    header = str(data.get("headerHtml") or "").strip()
+    masthead = (
+        f'<div class="paper-masthead">{_eager_images(rewrite_html_assets(header))}</div>'
+        if header
+        else ""
+    )
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -100,16 +197,47 @@ def paper_stem_html(data: dict[str, Any]) -> str:
   }}
   h1 {{ font-size: 20px; font-weight: 650; margin: 0 0 6px; }}
   .meta {{ color: #444; font-size: 12px; margin: 0 0 16px; }}
+  .paper-masthead {{
+    text-align: center;
+    margin: 0 0 16px;
+    line-height: 1.85;
+    font-size: 15px;
+  }}
+  .paper-masthead p {{ margin: 0.2em 0; }}
+  .paper-masthead img {{ max-width: 100%; max-height: 48px; height: auto; }}
+  .paper-section {{ margin: 0 0 16px; }}
+  .paper-section-title {{
+    font-weight: 700;
+    margin: 0 0 10px;
+    line-height: 1.7;
+  }}
+  .paper-section-title p {{ margin: 0.15em 0; }}
   .q-card {{ break-inside: avoid; margin: 0 0 14px; }}
   .q-no {{ font-weight: 650; margin-bottom: 4px; }}
   .rich-content .katex {{ font-size: 1.05em; }}
   .rich-content .katex-display {{ margin: 8px 0; }}
   .rich-content img {{ max-width: 100%; height: auto; }}
+  .rich-content table, .md-table-wrap table {{
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+  }}
+  .rich-content th, .rich-content td {{
+    border: 1px solid #333;
+    padding: 4px 8px;
+    text-align: center;
+  }}
+  .rich-content table {{ border-collapse: collapse; width: 100%; margin: 8px 0; }}
+  .rich-content th, .rich-content td {{
+    border: 1px solid #333; padding: 4px 8px; text-align: center;
+  }}
+  .md-table-wrap {{ overflow-x: auto; }}
 </style>
 </head>
 <body>
 <h1>{_esc(title)}</h1>
 <p class="meta">{heading}</p>
+{masthead}
 {body}
 </body>
 </html>
