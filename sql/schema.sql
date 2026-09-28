@@ -132,6 +132,23 @@ CREATE INDEX IF NOT EXISTS kga_knowledge ON knowledge_geogebra_animations (knowl
 CREATE INDEX IF NOT EXISTS kga_page ON knowledge_geogebra_animations (page_id);
 CREATE INDEX IF NOT EXISTS kga_book ON knowledge_geogebra_animations (book_id);
 
+CREATE TABLE IF NOT EXISTS knowledge_point_courseware (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  knowledge_code TEXT NOT NULL REFERENCES knowledge_points(code) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  filename TEXT NOT NULL DEFAULT '',
+  storage_key TEXT NOT NULL UNIQUE,
+  mime_type TEXT,
+  byte_size BIGINT NOT NULL DEFAULT 0,
+  sort_order INT NOT NULL DEFAULT 0,
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS kpc_knowledge ON knowledge_point_courseware (knowledge_code, sort_order);
+CREATE INDEX IF NOT EXISTS kpc_created ON knowledge_point_courseware (created_at DESC);
+
 CREATE TABLE IF NOT EXISTS question_options (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
@@ -245,6 +262,7 @@ ALTER TABLE question_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_knowledge_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_geogebra_animations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE knowledge_point_courseware ENABLE ROW LEVEL SECURITY;
 ALTER TABLE answer_sheets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE answer_sheet_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;

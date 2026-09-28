@@ -170,6 +170,7 @@ PAGE_HTML = r"""<!doctype html>
       }
     }
   </style>
+  <link rel="stylesheet" href="/static/knowledge-courseware.css"/>
 </head>
 <body>
   <main>
@@ -199,6 +200,7 @@ PAGE_HTML = r"""<!doctype html>
           </select>
           <button type="button" id="btnSearch">查找题目</button>
           <button type="button" class="secondary" id="btnKpAnim">查看所选知识点动画</button>
+          <button type="button" class="secondary" id="btnKpPpt">浏览所选知识点 PPT</button>
           <button type="button" class="secondary" id="btnSyncAnim">同步人教动画对照</button>
         </div>
         <div id="kpGroups" class="kp-groups">加载知识点…</div>
@@ -541,6 +543,20 @@ PAGE_HTML = r"""<!doctype html>
       try { await openAnimationsByCodes(pickedCodes(), '所选知识点动画'); }
       catch (err) { status.textContent = '加载动画失败: ' + err.message; }
     });
+    document.getElementById('btnKpPpt').addEventListener('click', () => {
+      const codes = pickedCodes();
+      if (!codes.length) {
+        status.textContent = '请先勾选知识点。';
+        return;
+      }
+      if (!window.KnowledgeCourseware) {
+        status.textContent = '课件组件未加载。';
+        return;
+      }
+      window.KnowledgeCourseware.openForCodes(codes, '所选知识点 PPT 课件').catch(err => {
+        status.textContent = '加载课件失败: ' + err.message;
+      });
+    });
     document.getElementById('btnSyncAnim').addEventListener('click', async () => {
       status.textContent = '正在从 GeoGebra 人教配套册同步对照关系…';
       try {
@@ -657,6 +673,7 @@ PAGE_HTML = r"""<!doctype html>
       kpGroups.innerHTML = '<p>加载失败: ' + esc(err.message) + '</p>';
     });
   </script>
+  <script src="/static/knowledge-courseware.js"></script>
 </body>
 </html>
 """

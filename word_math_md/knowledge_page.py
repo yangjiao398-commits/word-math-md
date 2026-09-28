@@ -56,7 +56,12 @@ PAGE_HTML = r"""<!doctype html>
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .actions button { padding: 6px 10px; font-size: 0.8rem; width: auto; }
     #filter { margin-bottom: 10px; }
+    input[type=file] {
+      width: 100%; padding: 8px; border-radius: 8px;
+      border: 1px solid var(--line); background: #12181f; color: var(--ink);
+    }
   </style>
+  <link rel="stylesheet" href="/static/knowledge-courseware.css"/>
 </head>
 <body>
   <main>
@@ -64,6 +69,8 @@ PAGE_HTML = r"""<!doctype html>
     <h1>高中数学知识点维护</h1>
     <p class="lead">
       知识点字典在 <code>knowledge_points</code>：编号、学期、大类、小类。
+      每个知识点可上传多份本地 <strong>PPT/PPTX</strong> 课件，文件保存在 Supabase Storage，元数据在
+      <code>knowledge_point_courseware</code>。
       给题目勾选后才写入关联表 <code>question_knowledge_points</code>。
       <a href="/">返回转换首页</a>
       · <a href="/practice">知识点专项训练</a>
@@ -113,11 +120,14 @@ PAGE_HTML = r"""<!doctype html>
       <div id="tableWrap">加载中…</div>
     </section>
     <p id="status"></p>
+    <input type="file" id="cwFile" accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden />
   </main>
   <script>
     const status = document.getElementById('status');
     const tableWrap = document.getElementById('tableWrap');
+    const cwFile = document.getElementById('cwFile');
     let rows = [];
+    let cwUploadCode = '';
     function esc(s) {
       return String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
     }
@@ -139,12 +149,14 @@ PAGE_HTML = r"""<!doctype html>
         tableWrap.innerHTML = '<p class="muted">没有匹配的知识点。</p>';
         return;
       }
-      tableWrap.innerHTML = '<table><thead><tr><th>编号</th><th>学期</th><th>大类</th><th>小类</th><th>被题引用</th><th></th></tr></thead><tbody>' +
+      tableWrap.innerHTML = '<table><thead><tr><th>编号</th><th>学期</th><th>大类</th><th>小类</th><th>引用</th><th>PPT</th><th></th></tr></thead><tbody>' +
         shown.map(r => '<tr data-code="' + esc(r.code) + '"><td>' + esc(r.code) +
           '</td><td>' + esc(r.semester || '') + '</td><td>' + esc(r.major_category || '') +
           '</td><td>' + esc(r.minor_category || '') +
           '</td><td>' + esc(r.question_count || 0) +
-          '</td><td class="actions">' +
+          '</td><td class="actions">' + esc(r.courseware_count || 0) +
+          ' <button type="button" class="secondary" data-cw-view>浏览</button>' +
+          ' <button type="button" class="secondary" data-cw-upload>上传</button></td><td class="actions">' +
           '<button type="button" class="secondary" data-edit>修改</button>' +
           '<button type="button" class="danger" data-del>删除</button></td></tr>'
         ).join('') + '</tbody></table>';
@@ -208,11 +220,57 @@ PAGE_HTML = r"""<!doctype html>
         setStatus('批量失败: ' + err.message);
       }
     });
+    cwFile.addEventListener('change', async () => {
+      const file = cwFile.files && cwFile.files[0];
+      const code = cwUploadCode;
+      cwUploadCode = '';
+      if (!file || !code) {
+        if (file && !code) alert('没有选中知识点，请重新点击该行的「上传」。');
+        cwFile.value = '';
+        return;
+      }
+      const defaultTitle = file.name.replace(/\.(pptx?)$/i, '');
+      const title = prompt('课件显示名称（取消则使用文件名）', defaultTitle);
+      const fd = new FormData();
+      fd.append('file', file);
+      const chosen = title == null ? defaultTitle : (title.trim() || defaultTitle);
+      fd.append('title', chosen);
+      setStatus('正在上传 ' + file.name + ' …');
+      try {
+        const res = await fetch('/api/exam-bank/knowledge-points/' + encodeURIComponent(code) + '/courseware', {
+          method: 'POST',
+          body: fd,
+        });
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        await reload();
+        setStatus('已上传「' + file.name + '」到知识点 ' + code + '。');
+      } catch (err) {
+        setStatus('上传失败: ' + err.message);
+        alert('上传失败: ' + err.message);
+      } finally {
+        cwFile.value = '';
+      }
+    });
     tableWrap.addEventListener('click', async (ev) => {
       const tr = ev.target.closest('tr[data-code]');
       if (!tr) return;
       const code = tr.getAttribute('data-code');
       const row = rows.find(r => r.code === code);
+      if (ev.target.closest('[data-cw-upload]')) {
+        cwUploadCode = code;
+        cwFile.value = '';
+        cwFile.click();
+        return;
+      }
+      if (ev.target.closest('[data-cw-view]')) {
+        if (window.KnowledgeCourseware) {
+          window.KnowledgeCourseware.openForCodes([code], code + ' · PPT 课件', { manage: true }).catch(err => {
+            setStatus('浏览失败: ' + err.message);
+          });
+        }
+        return;
+      }
       if (ev.target.closest('[data-edit]')) {
         const semester = prompt('学期', row ? (row.semester || '') : '');
         if (semester == null) return;
@@ -253,6 +311,7 @@ PAGE_HTML = r"""<!doctype html>
       tableWrap.innerHTML = '<p>加载失败: ' + esc(err.message) + '</p>';
     });
   </script>
+  <script src="/static/knowledge-courseware.js"></script>
 </body>
 </html>
 """

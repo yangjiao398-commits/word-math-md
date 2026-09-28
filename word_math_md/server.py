@@ -62,6 +62,12 @@ from word_math_md.knowledge_catalog import (
     update_catalog_item,
 )
 from word_math_md.knowledge_page import page_html as knowledge_page_html
+from word_math_md.knowledge_courseware import (
+    delete_courseware,
+    list_courseware,
+    list_courseware_for_codes,
+    upload_courseware,
+)
 from word_math_md.practice_page import page_html as practice_page_html
 from word_math_md.app_api import (
     app_runtime_config,
@@ -749,6 +755,7 @@ def index() -> str:
   </style>
   <link rel="stylesheet" href="/vendor/katex/katex.min.css"/>
   <link rel="stylesheet" href="/static/visual-solve.css"/>
+  <link rel="stylesheet" href="/static/knowledge-courseware.css"/>
 </head>
 <body>
   <main>
@@ -1285,6 +1292,8 @@ def index() -> str:
           card += '<div class="q-block kp-row">';
           card += '<button type="button" class="secondary linkish" data-kp-btn data-question-id="' +
             esc(q.question_id) + '">相关知识点</button>';
+          card += '<button type="button" class="secondary linkish" data-cw-btn data-cw-codes="' +
+            esc((q.knowledge_points || []).map(k => k.code).join(',')) + '">PPT 课件</button>';
           card += '<span data-kp-list="' + esc(q.question_id) + '">' + kpChips(q.knowledge_points) + '</span>';
           card += '</div>';
         }}
@@ -1621,6 +1630,18 @@ def index() -> str:
         ev.preventDefault();
         ev.stopPropagation();
         openKpDialog(kpBtn.getAttribute('data-question-id'));
+        return;
+      }}
+      const cwBtn = ev.target.closest('[data-cw-btn]');
+      if (cwBtn && questions.contains(cwBtn)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        const codes = (cwBtn.getAttribute('data-cw-codes') || '').split(',').filter(Boolean);
+        if (window.KnowledgeCourseware) {{
+          window.KnowledgeCourseware.openForCodes(codes, '本题相关知识点课件').catch(function(err) {{
+            alert('加载课件失败: ' + err.message);
+          }});
+        }}
         return;
       }}
       if (ev.target.closest('[data-paper-meta]')) return;
@@ -1962,6 +1983,7 @@ def index() -> str:
       }}
     }});
   </script>
+  <script src="/static/knowledge-courseware.js"></script>
   <script src="/static/visual-solve.js"></script>
 </body>
 </html>"""
@@ -2565,6 +2587,63 @@ def api_delete_knowledge_point(code: str) -> JSONResponse:
         delete_catalog_item(code)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/exam-bank/knowledge-courseware")
+def api_list_courseware_by_codes(codes: str = "") -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    items = [c.strip() for c in (codes or "").split(",") if c.strip()]
+    try:
+        grouped = list_courseware_for_codes(items)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    flat = [row for rows in grouped.values() for row in rows]
+    return JSONResponse({"ok": True, "by_code": grouped, "items": flat})
+
+
+@app.get("/api/exam-bank/knowledge-points/{code}/courseware")
+def api_list_knowledge_courseware(code: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        items = list_courseware(code)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "knowledge_code": code, "courseware": items})
+
+
+@app.post("/api/exam-bank/knowledge-points/{code}/courseware")
+async def api_upload_knowledge_courseware(
+    code: str,
+    file: UploadFile = File(...),
+    title: str = Form(""),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    raw = await file.read()
+    try:
+        item = upload_courseware(code, file.filename or "courseware.pptx", raw, title=title)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "courseware": item})
+
+
+@app.delete("/api/exam-bank/knowledge-courseware/{item_id}")
+def api_delete_knowledge_courseware(item_id: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        delete_courseware(item_id)
+    except ValueError as exc:
+        raise HTTPException(404 if "不存在" in str(exc) else 400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
     return JSONResponse({"ok": True})
