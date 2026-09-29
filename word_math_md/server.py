@@ -584,6 +584,9 @@ def index() -> str:
     table.sheet-table input {{
       margin: 0; padding: 6px 8px; font-size: 0.85rem;
     }}
+    table.sheet-table td.sheet-answer {{ color: var(--ink); line-height: 1.65; }}
+    table.sheet-table td.sheet-answer .katex {{ font-size: 1.05em; color: inherit; }}
+    table.sheet-table .ans-or {{ color: var(--muted); margin: 0 0.35em; }}
     .sheet-history {{ color: var(--muted); font-size: 0.82rem; margin: 0 0 8px; }}
     .q-meta {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
     .chip {{
@@ -1858,12 +1861,17 @@ def index() -> str:
         '<th>题</th><th>题型</th><th>识别答案</th><th>标准答案</th><th>结果</th><th>分</th>' +
         '</tr></thead><tbody>';
       html += items.map(item => {{
-        const cls = item.is_correct ? 'sheet-ok' : (item.status === 'needs_review' ? 'sheet-warn' : 'sheet-bad');
+        const cls = item.status === 'missing'
+          ? 'sheet-warn'
+          : (item.is_correct ? 'sheet-ok' : (item.status === 'needs_review' ? 'sheet-warn' : 'sheet-bad'));
+        const resultText = item.status === 'missing'
+          ? '未识别'
+          : ((item.is_correct ? '正确' : '错误') + ' · ' + statusLabel(item.status));
         return '<tr><td>' + esc(item.question_no) + '</td><td>' + esc(item.type_label || item.type_code) +
           '</td><td><input data-sheet-no="' + esc(item.question_no) + '" value="' +
-          esc(item.student_answer || '') + '" /></td><td>' + esc(item.expected_answer || '') +
-          '</td><td class="' + cls + '">' + (item.is_correct ? '正确' : '错误') +
-          ' · ' + statusLabel(item.status) + '</td><td>' +
+          esc(item.student_answer || '') + '" /></td><td class="sheet-answer">' +
+          (item.expected_answer_html || esc(item.expected_answer || '')) +
+          '</td><td class="' + cls + '">' + resultText + '</td><td>' +
           esc(item.score) + '/' + esc(item.max_score) + '</td></tr>';
       }}).join('');
       html += '</tbody></table>';
@@ -1909,9 +1917,14 @@ def index() -> str:
         const res = await fetch('/api/exam-bank/ocr-status');
         const data = await readJson(res);
         const engines = (data.engines || []).join('、') || '未安装';
+        const extra = [
+          data.page_model ? '整页 ' + data.page_model : '',
+          data.formula_model ? '填空 ' + data.formula_model : '',
+          data.choice_vision ? '括号字母 ' + data.choice_vision : '括号字母需配置视觉模型密钥',
+        ].filter(Boolean).join('；');
         document.getElementById('sheetHint').textContent =
           data.configured
-            ? ('拍摄做完的试卷照片（可多张）。OCR：' + engines + '。识别后与题库标准答案比对打分。')
+            ? ('拍摄做完的试卷照片（可多张）。OCR：' + engines + '。' + extra + '。识别后与题库标准答案比对打分。')
             : '尚未安装 OCR。请安装 rapidocr-onnxruntime，或在 .env 配置 DASHSCOPE_API_KEY / OPENAI_API_KEY。';
       }} catch (err) {{
         document.getElementById('sheetHint').textContent = '无法检查 OCR 状态。';
@@ -2694,6 +2707,9 @@ def _grade_report_payload(
     persist_error: str = "",
     sheet_id: str = "",
 ) -> dict:
+    from word_math_md.answer_display import attach_answer_html
+
+    attach_answer_html(report)
     payload = {
         "ok": True,
         "ocr_engine": ocr_engine,
@@ -2773,8 +2789,9 @@ async def api_grade_sheet(
         raise HTTPException(400, "请至少上传一张答卷照片。")
     try:
         paper = get_paper_questions(paper_id)
-        ocr = ocr_images(images)
-        report = grade_paper(paper.get("questions") or [], ocr.get("answers_by_no") or {})
+        questions = paper.get("questions") or []
+        ocr = ocr_images(images, questions=questions)
+        report = grade_paper(questions, ocr.get("answers_by_no") or {})
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except RuntimeError as exc:
@@ -3169,8 +3186,9 @@ async def api_app_grade_sheet(
     name = (student_name or "").strip() or str(user.get("nickname") or user.get("phone") or "")
     try:
         paper = get_paper_questions(paper_id)
-        ocr = ocr_images(images)
-        report = grade_paper(paper.get("questions") or [], ocr.get("answers_by_no") or {})
+        questions = paper.get("questions") or []
+        ocr = ocr_images(images, questions=questions)
+        report = grade_paper(questions, ocr.get("answers_by_no") or {})
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except RuntimeError as exc:

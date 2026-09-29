@@ -1,0 +1,6 @@
+# Optional readers for answer-sheet grading.
+# Fill-in blanks: PP-FormulaNet via paddleocr. Full page: pix2text.
+paddlepaddle==3.3.0
+paddleocr
+ftfy
+pix2text
