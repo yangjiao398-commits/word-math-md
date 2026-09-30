@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -53,6 +54,7 @@ from word_math_md.exam_bank import (
 )
 from word_math_md.sheet_grade import grade_paper
 from word_math_md.sheet_ocr import ocr_configured, ocr_images
+from word_math_md.sheet_ocr_v2 import ocr_images_v2, ocr_v2_configured
 from word_math_md.knowledge_catalog import (
     bulk_upsert_catalog,
     create_catalog_item,
@@ -554,6 +556,11 @@ def index() -> str:
       display: flex; align-items: center; justify-content: center;
     }}
     #sheetDialog[hidden] {{ display: none; }}
+    #sheetDialog2 {{
+      position: fixed; inset: 0; z-index: 33;
+      display: flex; align-items: center; justify-content: center;
+    }}
+    #sheetDialog2[hidden] {{ display: none; }}
     .sheet-panel {{
       position: relative; width: min(920px, 96vw); max-height: 90vh;
       display: flex; flex-direction: column;
@@ -853,6 +860,28 @@ def index() -> str:
           <button type="button" class="secondary" id="sheetClose">关闭</button>
           <button type="button" class="secondary" id="sheetRegrade" hidden>按修改重评</button>
           <button type="button" id="sheetGrade">识别并评分</button>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="sheetFiles2" accept="image/jpeg,image/png,image/webp,image/bmp,.jpg,.jpeg,.png,.webp,.bmp" multiple hidden />
+    <div id="sheetDialog2" hidden>
+      <div class="kp-backdrop" id="sheetBackdrop2"></div>
+      <div class="sheet-panel" role="dialog" aria-labelledby="sheetTitle2">
+        <h3 id="sheetTitle2">上传答卷评分2</h3>
+        <p class="summary" id="sheetHint2">版面检测后，PaddleOCR 识别中文和题号，pix2tex 识别公式，再与标准答案比对。</p>
+        <div class="sheet-fields">
+          <label>学生姓名（可空）
+            <input type="text" id="sheetStudent2" placeholder="如 张三" />
+          </label>
+          <button type="button" class="secondary" id="sheetPick2">选择照片</button>
+        </div>
+        <div class="sheet-thumbs" id="sheetThumbs2"></div>
+        <p class="sheet-history" id="sheetHistory2"></p>
+        <div class="sheet-body" id="sheetResult2"></div>
+        <div class="kp-actions">
+          <button type="button" class="secondary" id="sheetClose2">关闭</button>
+          <button type="button" class="secondary" id="sheetRegrade2" hidden>按修改重评</button>
+          <button type="button" id="sheetGrade2">识别并评分</button>
         </div>
       </div>
     </div>
@@ -1246,6 +1275,9 @@ def index() -> str:
           '<button type="button" class="secondary" id="btnUploadSheetPreview" data-upload-sheet data-paper-id="' +
           esc(paper.id || '') + '" data-paper-title="' + esc(paper.title || paper.paper_code || '') +
           '">上传答卷评分</button>' +
+          '<button type="button" class="secondary" id="btnUploadSheetPreview2" data-upload-sheet-v2 data-paper-id="' +
+          esc(paper.id || '') + '" data-paper-title="' + esc(paper.title || paper.paper_code || '') +
+          '">上传答卷评分2</button>' +
           '<button type="button" class="paper-delete-btn" data-delete-paper data-paper-id="' +
           esc(paper.id || '') + '" data-paper-title="' + esc(paper.title || paper.paper_code || '') +
           '">删除试卷</button>' +
@@ -1520,6 +1552,9 @@ def index() -> str:
           '<button type="button" class="paper-action-btn" data-upload-sheet data-paper-id="' +
           esc(p.id) + '" data-paper-title="' + esc(p.title || p.paper_code || '') +
           '">上传答卷</button>' +
+          '<button type="button" class="paper-action-btn" data-upload-sheet-v2 data-paper-id="' +
+          esc(p.id) + '" data-paper-title="' + esc(p.title || p.paper_code || '') +
+          '">上传答卷评分2</button>' +
           '<button type="button" class="paper-action-btn paper-delete-btn" data-delete-paper data-paper-id="' +
           esc(p.id) + '" data-paper-title="' + esc(p.title || p.paper_code || '') +
           '">删除</button>' +
@@ -1616,6 +1651,16 @@ def index() -> str:
         openSheetDialog(
           uploadBtn.getAttribute('data-paper-id'),
           uploadBtn.getAttribute('data-paper-title') || ''
+        );
+        return;
+      }}
+      const uploadBtn2 = ev.target.closest('[data-upload-sheet-v2]');
+      if (uploadBtn2 && questions.contains(uploadBtn2)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        openSheetDialog2(
+          uploadBtn2.getAttribute('data-paper-id'),
+          uploadBtn2.getAttribute('data-paper-title') || ''
         );
         return;
       }}
@@ -1991,6 +2036,171 @@ def index() -> str:
         await loadSheetHistory();
       }} catch (err) {{
         document.getElementById('sheetHint').textContent = '重评失败: ' + err.message;
+      }} finally {{
+        btn.disabled = false;
+      }}
+    }});
+    const sheetDialog2 = document.getElementById('sheetDialog2');
+    const sheetFiles2 = document.getElementById('sheetFiles2');
+    const sheetThumbs2 = document.getElementById('sheetThumbs2');
+    const sheetResult2 = document.getElementById('sheetResult2');
+    const sheetHistory2 = document.getElementById('sheetHistory2');
+    let sheetPaperId2 = '';
+    let sheetObjectUrls2 = [];
+    function closeSheetDialog2() {{
+      sheetDialog2.hidden = true;
+      sheetPaperId2 = '';
+      sheetFiles2.value = '';
+      sheetObjectUrls2.forEach(u => URL.revokeObjectURL(u));
+      sheetObjectUrls2 = [];
+      sheetThumbs2.innerHTML = '';
+    }}
+    function renderSheetThumbs2() {{
+      sheetObjectUrls2.forEach(u => URL.revokeObjectURL(u));
+      sheetObjectUrls2 = [];
+      const files = Array.from(sheetFiles2.files || []);
+      sheetThumbs2.innerHTML = files.map(file => {{
+        const url = URL.createObjectURL(file);
+        sheetObjectUrls2.push(url);
+        return '<img src="' + url + '" alt="' + esc(file.name) + '" />';
+      }}).join('');
+    }}
+    function renderSheetReport2(data) {{
+      const items = data.items || [];
+      let html = '<p class="sheet-score">得分 ' + esc(data.total_score) +
+        ' / ' + esc(data.max_score) +
+        ' · 对 ' + esc(data.correct_count) +
+        ' / ' + esc(data.question_count) +
+        ' 题</p>';
+      html += '<p class="summary">识别引擎 ' + esc(data.ocr_engine || 'paddleocr+pix2tex') +
+        '。已识别 ' + esc(data.recognized_count) +
+        ' 题。未识别 ' + esc(data.missing_count) +
+        ' 题，待复核 ' + esc(data.needs_review_count) +
+        ' 题。可改识别结果后点「按修改重评」。</p>';
+      html += '<table class="sheet-table"><thead><tr>' +
+        '<th>题</th><th>题型</th><th>识别答案</th><th>标准答案</th><th>结果</th><th>分</th>' +
+        '</tr></thead><tbody>';
+      html += items.map(item => {{
+        const cls = item.status === 'missing'
+          ? 'sheet-warn'
+          : (item.is_correct ? 'sheet-ok' : (item.status === 'needs_review' ? 'sheet-warn' : 'sheet-bad'));
+        const resultText = item.status === 'missing'
+          ? '未识别'
+          : ((item.is_correct ? '正确' : '错误') + ' · ' + statusLabel(item.status));
+        return '<tr><td>' + esc(item.question_no) + '</td><td>' + esc(item.type_label || item.type_code) +
+          '</td><td><input data-sheet2-no="' + esc(item.question_no) + '" value="' +
+          esc(item.student_answer || '') + '" /></td><td class="sheet-answer">' +
+          (item.expected_answer_html || esc(item.expected_answer || '')) +
+          '</td><td class="' + cls + '">' + resultText + '</td><td>' +
+          esc(item.score) + '/' + esc(item.max_score) + '</td></tr>';
+      }}).join('');
+      html += '</tbody></table>';
+      if (data.ocr_text) {{
+        html += '<details><summary>OCR 原文</summary><pre>' + esc(data.ocr_text).slice(0, 4000) + '</pre></details>';
+      }}
+      sheetResult2.innerHTML = html;
+      document.getElementById('sheetRegrade2').hidden = !items.length;
+    }}
+    async function loadSheetHistory2() {{
+      if (!sheetPaperId2) return;
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(sheetPaperId2) + '/answer-sheets');
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const rows = data.sheets || [];
+        sheetHistory2.textContent = rows.length
+          ? ('最近评分：' + rows.slice(0, 5).map(row => {{
+            const who = row.student_name || '未署名';
+            const when = String(row.created_at || '').replace('T', ' ').slice(0, 16);
+            return esc(who) + ' ' + esc(row.total_score) + '/' + esc(row.max_score) +
+              (when ? ' · ' + esc(when) : '');
+          }}).join('；'))
+          : '本题还没有评分记录。';
+      }} catch (err) {{
+        sheetHistory2.textContent = '暂无法读取评分记录。';
+      }}
+    }}
+    async function openSheetDialog2(paperId, title) {{
+      sheetPaperId2 = paperId || '';
+      if (!sheetPaperId2) return;
+      document.getElementById('sheetTitle2').textContent = '上传答卷评分2 · ' + (title || '试卷');
+      document.getElementById('sheetStudent2').value = '';
+      sheetFiles2.value = '';
+      sheetResult2.innerHTML = '';
+      document.getElementById('sheetRegrade2').hidden = true;
+      renderSheetThumbs2();
+      sheetDialog2.hidden = false;
+      try {{
+        const res = await fetch('/api/exam-bank/ocr-status-v2');
+        const data = await readJson(res);
+        document.getElementById('sheetHint2').textContent = data.ready
+          ? ('PaddleOCR 做版面检测、中文和题号；pix2tex 识别公式区域。首次识别会下载模型，请稍候。')
+          : '评分2尚未就绪。请安装 paddleocr 和 pix2tex。';
+      }} catch (err) {{
+        document.getElementById('sheetHint2').textContent = '无法检查评分2的识别组件。';
+      }}
+      await loadSheetHistory2();
+    }}
+    document.getElementById('sheetBackdrop2').addEventListener('click', closeSheetDialog2);
+    document.getElementById('sheetClose2').addEventListener('click', closeSheetDialog2);
+    document.getElementById('sheetPick2').addEventListener('click', () => sheetFiles2.click());
+    sheetFiles2.addEventListener('change', renderSheetThumbs2);
+    document.getElementById('sheetGrade2').addEventListener('click', async () => {{
+      if (!sheetPaperId2) return;
+      const files = Array.from(sheetFiles2.files || []);
+      if (!files.length) {{
+        document.getElementById('sheetHint2').textContent = '请先选择一张或多张答卷照片。';
+        return;
+      }}
+      const btn = document.getElementById('sheetGrade2');
+      btn.disabled = true;
+      document.getElementById('sheetHint2').textContent = '正在做版面检测，并用 PaddleOCR / pix2tex 识别…';
+      const fd = new FormData();
+      const name = document.getElementById('sheetStudent2').value.trim();
+      if (name) fd.append('student_name', name);
+      files.forEach(file => fd.append('files', file));
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(sheetPaperId2) + '/grade-sheet-v2', {{
+          method: 'POST',
+          body: fd,
+        }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        document.getElementById('sheetHint2').textContent = data.persist_error
+          ? ('已评分，但保存记录失败：' + data.persist_error)
+          : '评分完成。';
+        renderSheetReport2(data);
+        await loadSheetHistory2();
+      }} catch (err) {{
+        document.getElementById('sheetHint2').textContent = '评分失败: ' + err.message;
+      }} finally {{
+        btn.disabled = false;
+      }}
+    }});
+    document.getElementById('sheetRegrade2').addEventListener('click', async () => {{
+      if (!sheetPaperId2) return;
+      const answers = Array.from(document.querySelectorAll('[data-sheet2-no]')).map(el => ({{
+        no: Number(el.getAttribute('data-sheet2-no')),
+        answer: el.value,
+      }}));
+      const btn = document.getElementById('sheetRegrade2');
+      btn.disabled = true;
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(sheetPaperId2) + '/regrade-sheet', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            student_name: document.getElementById('sheetStudent2').value.trim(),
+            answers,
+          }}),
+        }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        document.getElementById('sheetHint2').textContent = '已按修改后的答案重新评分。';
+        renderSheetReport2(data);
+        await loadSheetHistory2();
+      }} catch (err) {{
+        document.getElementById('sheetHint2').textContent = '重评失败: ' + err.message;
       }} finally {{
         btn.disabled = false;
       }}
@@ -2791,6 +3001,60 @@ async def api_grade_sheet(
         paper = get_paper_questions(paper_id)
         questions = paper.get("questions") or []
         ocr = ocr_images(images, questions=questions)
+        report = grade_paper(questions, ocr.get("answers_by_no") or {})
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    sheet_id, persist_error = _persist_sheet(
+        paper_id,
+        report,
+        student_name,
+        ocr.get("engine") or "",
+        ocr.get("ocr_text") or "",
+    )
+    return JSONResponse(
+        _grade_report_payload(
+            report,
+            ocr_engine=ocr.get("engine") or "",
+            ocr_text=ocr.get("ocr_text") or "",
+            persist_error=persist_error,
+            sheet_id=sheet_id,
+        )
+    )
+
+
+@app.get("/api/exam-bank/ocr-status-v2")
+def api_ocr_status_v2() -> JSONResponse:
+    data = ocr_v2_configured()
+    data["ok"] = True
+    return JSONResponse(data)
+
+
+@app.post("/api/exam-bank/papers/{paper_id}/grade-sheet-v2")
+async def api_grade_sheet_v2(
+    paper_id: str,
+    files: list[UploadFile] = File(default=[]),
+    student_name: str = Form(""),
+) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise HTTPException(400, "无效的试卷 id")
+    images: list[tuple[bytes, str]] = []
+    for item in files:
+        raw = await item.read()
+        if not raw:
+            continue
+        images.append((raw, item.content_type or ""))
+    if not images:
+        raise HTTPException(400, "请至少上传一张答卷照片。")
+    try:
+        paper = get_paper_questions(paper_id)
+        questions = paper.get("questions") or []
+        ocr = await asyncio.to_thread(ocr_images_v2, images, questions=questions)
         report = grade_paper(questions, ocr.get("answers_by_no") or {})
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

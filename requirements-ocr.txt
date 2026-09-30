@@ -4,3 +4,4 @@ paddlepaddle==3.3.0
 paddleocr
 ftfy
 pix2text
+pix2tex

@@ -7,6 +7,8 @@ import io
 import json
 import os
 import re
+import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -37,6 +39,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 MAX_IMAGE_PX = 2800
+# Pix2Text and the formula models can spend minutes on one photo. Grading must
+# still return the RapidOCR result once this extra budget is used up.
+_EXTRA_BUDGET_S = float(os.environ.get("SHEET_OCR_EXTRA_SECONDS") or 8)
+_HEAVY_LOCK = threading.Lock()
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 ALLOWED_MIME = {
     "image/jpeg": "JPEG",
@@ -151,6 +157,28 @@ def prepare_image(data: bytes, mime: str = "") -> tuple[Image.Image, bytes, str]
     return sharp, out.getvalue(), mime_out
 
 
+def _bounded_call(fn, timeout: float):
+    """Run a slow reader without holding the grade request past ``timeout`` seconds."""
+    if timeout <= 0 or not _HEAVY_LOCK.acquire(blocking=False):
+        return None
+    done = threading.Event()
+    box: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            box["value"] = fn()
+        except Exception:
+            box["value"] = None
+        finally:
+            done.set()
+            _HEAVY_LOCK.release()
+
+    threading.Thread(target=run, daemon=True).start()
+    if not done.wait(timeout):
+        return None
+    return box.get("value")
+
+
 def ocr_images(
     images: list[tuple[bytes, str]],
     *,
@@ -177,11 +205,13 @@ def ocr_images(
         for no, ans in (page.get("answers") or {}).items():
             answers[int(no)] = ans
     blob = "\n".join(merged_text)
+    extra_deadline = time.perf_counter() + _EXTRA_BUDGET_S
     page_text = ""
     if questions and module_installed("pix2text"):
-        page_text = "\n\n".join(
-            recognize_page_markdown(img) for img in prepared
-        ).strip()
+        page_text = _bounded_call(
+            lambda: "\n\n".join(recognize_page_markdown(img) for img in prepared).strip(),
+            extra_deadline - time.perf_counter(),
+        ) or ""
     if questions:
         ordered = parse_answers_in_order(blob, questions)
         if page_text:
@@ -196,7 +226,9 @@ def ocr_images(
         else:
             answers = ordered
         if name == "rapidocr":
-            answers = _recover_blank_answers(prepared, pages, questions, answers)
+            answers = _recover_blank_answers(
+                prepared, pages, questions, answers, deadline=extra_deadline
+            )
     else:
         parsed = parse_ocr_answers(blob)
         for no, ans in parsed.items():
@@ -546,6 +578,7 @@ def _recover_blank_answers(
     pages: list[dict[str, Any]],
     questions: list[dict[str, Any]],
     answers: dict[int, str],
+    deadline: float | None = None,
 ) -> dict[int, str]:
     """Re-read the blank itself when the full-page pass missed a choice or formula."""
     outline = _question_outline(questions)
@@ -565,7 +598,8 @@ def _recover_blank_answers(
                 snippet = _vision_choice_text(crop) or _rapid_crop_text(crop)
                 answer = answer_from_snippet(snippet, kind)
             else:
-                formula = recognize_formula(crop)
+                remaining = 0.0 if deadline is None else deadline - time.perf_counter()
+                formula = _bounded_call(lambda crop=crop: recognize_formula(crop), remaining) or ""
                 answer = answer_from_snippet(formula, kind) if formula else ""
                 if not answer and not found.get(no):
                     answer = answer_from_snippet(_rapid_crop_text(crop), kind)

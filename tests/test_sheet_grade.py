@@ -216,6 +216,33 @@ def test_formula_choice_prefers_chinese_model_unless_it_is_not_math():
     assert choose_formula(r"\frac{2}{3}\pi+2", "2\\pi/3+2").startswith("\\frac")
 
 
+def test_page_reader_cannot_stall_grading(monkeypatch):
+    import io
+    import time
+
+    from PIL import Image
+
+    from word_math_md import sheet_ocr
+
+    def stall(_image):
+        time.sleep(30)
+        return "1. LATE"
+
+    monkeypatch.setattr(sheet_ocr, "recognize_page_markdown", stall)
+    monkeypatch.setattr(sheet_ocr, "_EXTRA_BUDGET_S", 0.3)
+    monkeypatch.setattr(sheet_ocr, "_EXTRA_BUDGET_S", 0.4)
+    image = Image.new("RGB", (80, 40), "white")
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    started = time.perf_counter()
+    got = sheet_ocr.ocr_images(
+        [(buf.getvalue(), "image/png")],
+        questions=[{"question_no": 1, "type_code": "single_choice"}],
+    )
+    assert time.perf_counter() - started < 8
+    assert "LATE" not in (got.get("ocr_text") or "")
+
+
 def test_vision_json_answers():
     text = '```json\n{"answers":[{"no":1,"answer":"B"},{"no":2,"answer":"1/2"}]}\n```'
     got = _answers_from_vision_text(text)
