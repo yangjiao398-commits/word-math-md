@@ -136,12 +136,10 @@ def _app_user(
 
 
 def _require_member(user: dict) -> dict:
+    """Attach membership for display. Content stays available without a paid plan."""
     from word_math_md.app_api import get_membership
 
-    member = get_membership(user["id"])
-    if not member.get("entitled"):
-        raise HTTPException(402, "需要有效会员才能使用该内容")
-    user["membership"] = member
+    user["membership"] = get_membership(user["id"])
     return user
 
 
@@ -3483,7 +3481,7 @@ def api_app_knowledge_points(user: dict = Depends(_app_user)) -> JSONResponse:
         raise HTTPException(503, "未配置 Supabase 题库。")
     _require_member(user)
     try:
-        points = list_catalog(with_usage=True)
+        points = list_catalog()
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
     return JSONResponse({"ok": True, "knowledge_points": points})

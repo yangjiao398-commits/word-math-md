@@ -81,6 +81,22 @@ def test_exam_bank_delete_paper_api(monkeypatch):
     assert data["question_count"] == 2
 
 
+def test_content_stays_open_without_a_paid_plan(monkeypatch):
+    from word_math_md import server
+
+    monkeypatch.setattr(
+        "word_math_md.app_api.get_membership",
+        lambda user_id: {
+            "plan": "",
+            "status": "none",
+            "expires_at": None,
+            "entitled": False,
+        },
+    )
+    user = server._require_member({"id": "user-without-plan"})
+    assert user["membership"]["entitled"] is False
+
+
 def test_app_runtime_config_katex_matches_preview():
     cfg = app_runtime_config()
     assert cfg["katex"]["version"] == "0.18.4"
