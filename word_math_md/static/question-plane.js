@@ -9,9 +9,17 @@
       title: "第2题 · 分段函数求值",
       href: "/static/plane-sz-q2.html?embed=1",
     },
+    "d793894c-ce81-4d98-9f85-a98f435c1ea4": {
+      title: "第3题 · 二次不等式与根的分布",
+      href: "/static/plane-sz-q3.html?embed=1",
+    },
     "4129cbd6-c865-4b57-8d48-3c1b6a0ab0c8": {
       title: "第7题 · 奇函数与基本不等式",
       href: "/static/plane-sz-q7.html?embed=1&v=2",
+    },
+    "fbd83a00-ed11-4ede-979d-d40caefa79df": {
+      title: "第16题 · 幂函数与奇函数单调性",
+      href: "/static/plane-sz-q16.html?embed=1",
     },
   };
 
@@ -82,5 +90,19 @@
     open(btn.getAttribute("data-plane-q") || "");
   });
 
-  window.QuestionPlane = { lessons: lessons, open: open, close: close };
+  function refresh() {
+    return fetch("/api/plane-scenes", { cache: "no-store" })
+      .then(function (res) { return res.ok ? res.json() : { lessons: {} }; })
+      .then(function (data) {
+        const incoming = (data && data.lessons) || {};
+        Object.keys(incoming).forEach(function (id) {
+          if (incoming[id] && incoming[id].href) lessons[id] = incoming[id];
+        });
+        return lessons;
+      })
+      .catch(function () { return lessons; });
+  }
+
+  refresh();
+  window.QuestionPlane = { lessons: lessons, open: open, close: close, refresh: refresh };
 })();

@@ -38,6 +38,15 @@
         return (p - 1) / (p + 1);
       };
     }
+    if (spec.preset === "linear-reciprocal") {
+      const q = spec.linearReciprocal || {};
+      const a = Number(q.a);
+      const k = Number(q.k);
+      if (!Number.isFinite(a) || !Number.isFinite(k) || k === 0) {
+        throw new Error("一次加反比例需要有限系数，且反比例系数不为 0");
+      }
+      return function (x) { return a * x + k / x; };
+    }
     throw new Error("未知的平面函数预设：" + spec.preset);
   }
 

@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "title": "第 3 题",
+  "meta": "根据题干、分析、详解生成",
+  "view": {
+    "xMin": -0.2,
+    "xMax": 4.2,
+    "yMin": -4.78,
+    "yMax": 2.33
+  },
+  "curves": [
+    {
+      "id": "f",
+      "preset": "quadratic",
+      "quadratic": {
+        "a": -1.0,
+        "b": 4.0,
+        "c": -3.0
+      },
+      "label": "y = -x²+4x-3",
+      "labelCorner": "left",
+      "color": "#2457d6"
+    }
+  ],
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "不等式的解集是，则的值是（ ）",
+      "caption": "不等式的解集是，则的值是（ ）",
+      "formula": [
+        "ax^{2}+bx-3<0",
+        "\\left({-\\infty,1}\\right)\\cup\\left({3,+\\infty}\\right)",
+        "b-a"
+      ],
+      "curve": "f",
+      "curves": [
+        "f"
+      ],
+      "view": {
+        "xMin": -0.2,
+        "xMax": 4.2,
+        "yMin": -4.78,
+        "yMax": 2.33
+      },
+      "intervals": [
+        {
+          "from": -0.2,
+          "to": 1.0,
+          "tone": "down",
+          "label": "(-∞, 1)"
+        },
+        {
+          "from": 3.0,
+          "to": 4.2,
+          "tone": "down",
+          "label": "(3, +∞)"
+        }
+      ],
+      "markers": [
+        {
+          "x": 1.0,
+          "name": "x=1",
+          "tone": "neutral"
+        },
+        {
+          "x": 3.0,
+          "name": "x=3",
+          "tone": "neutral"
+        }
+      ],
+      "guides": [
+        {
+          "x": 1.0,
+          "label": "x = 1"
+        },
+        {
+          "x": 3.0,
+          "label": "x = 3"
+        }
+      ]
+    },
+    {
+      "id": "step-2",
+      "title": "由题意得，，和是方程的根，然后结合方",
+      "caption": "由题意得，，和是方程的根，然后结合方程的根与系数关系即可求解．",
+      "formula": [
+        "a<0",
+        "x=1",
+        "x=3",
+        "ax^{2}+bx-3=0"
+      ],
+      "curve": "f",
+      "curves": [
+        "f"
+      ],
+      "view": {
+        "xMin": -3.2,
+        "xMax": 3.2,
+        "yMin": -30.64,
+        "yMax": 8.3
+      },
+      "intervals": [],
+      "markers": [
+        {
+          "x": 1.0,
+          "name": "x=1",
+          "tone": "neutral"
+        },
+        {
+          "x": 3.0,
+          "name": "x=3",
+          "tone": "neutral"
+        }
+      ],
+      "guides": [
+        {
+          "x": 1.0,
+          "label": "x = 1"
+        },
+        {
+          "x": 3.0,
+          "label": "x = 3"
+        }
+      ]
+    },
+    {
+      "id": "step-3",
+      "title": "因为不等式的解集是",
+      "caption": "因为不等式的解集是",
+      "formula": [
+        "ax^{2}+bx-3<0",
+        "\\left({-\\infty,1}\\right)\\cup\\left({3,+\\infty}\\right)"
+      ],
+      "curve": "f",
+      "curves": [
+        "f"
+      ],
+      "view": {
+        "xMin": -0.2,
+        "xMax": 4.2,
+        "yMin": -4.78,
+        "yMax": 2.33
+      },
+      "intervals": [
+        {
+          "from": -0.2,
+          "to": 1.0,
+          "tone": "down",
+          "label": "(-∞, 1)"
+        },
+        {
+          "from": 3.0,
+          "to": 4.2,
+          "tone": "down",
+          "label": "(3, +∞)"
+        }
+      ],
+      "markers": [
+        {
+          "x": 1.0,
+          "name": "x=1",
+          "tone": "neutral"
+        },
+        {
+          "x": 3.0,
+          "name": "x=3",
+          "tone": "neutral"
+        }
+      ],
+      "guides": [
+        {
+          "x": 1.0,
+          "label": "x = 1"
+        },
+        {
+          "x": 3.0,
+          "label": "x = 3"
+        }
+      ]
+    },
+    {
+      "id": "step-4",
+      "title": "所以，和是方程的根",
+      "caption": "所以，和是方程的根",
+      "formula": [
+        "a<0",
+        "x=1",
+        "x=3",
+        "ax^{2}+bx-3=0"
+      ],
+      "curve": "f",
+      "curves": [
+        "f"
+      ],
+      "view": {
+        "xMin": -3.2,
+        "xMax": 3.2,
+        "yMin": -30.64,
+        "yMax": 8.3
+      },
+      "intervals": [],
+      "markers": [
+        {
+          "x": 1.0,
+          "name": "x=1",
+          "tone": "neutral"
+        },
+        {
+          "x": 3.0,
+          "name": "x=3",
+          "tone": "neutral"
+        }
+      ],
+      "guides": [
+        {
+          "x": 1.0,
+          "label": "x = 1"
+        },
+        {
+          "x": 3.0,
+          "label": "x = 3"
+        }
+      ]
+    },
+    {
+      "id": "step-5",
+      "title": "所以，即，，则．",
+      "caption": "所以，即，，则．",
+      "formula": [
+        "\\left\\{\\begin{array}{l}\\begin{array}{l}1+3=-\\frac{b}{a}\\\\1\\times3=-\\frac{3}{a}\\end{array}\\end{array}\\right.",
+        "a=-1",
+        "b=4",
+        "b-a=5"
+      ],
+      "curve": "f",
+      "curves": [
+        "f"
+      ],
+      "view": {
+        "xMin": -3.2,
+        "xMax": 3.2,
+        "yMin": -30.64,
+        "yMax": 8.3
+      },
+      "intervals": [],
+      "markers": [],
+      "guides": []
+    },
+    {
+      "id": "step-6",
+      "title": "故选：D．",
+      "caption": "故选：D．",
+      "formula": [],
+      "curve": "f",
+      "curves": [
+        "f"
+      ],
+      "view": {
+        "xMin": -3.2,
+        "xMax": 3.2,
+        "yMin": -30.64,
+        "yMax": 8.3
+      },
+      "intervals": [],
+      "markers": [],
+      "guides": []
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>解题过程</title>
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css"/>
+  <link rel="stylesheet" href="/static/plane-scene.css?v=3"/>
+  <style>
+    body.plane-embed .kicker,
+    body.plane-embed h1,
+    body.plane-embed .lead { display: none; }
+  </style>
+</head>
+<body class="plane-page">
+  <script>if (location.search.indexOf("embed=1") >= 0) document.body.classList.add("plane-embed");</script>
+  <main>
+    <p class="kicker">plane 引擎</p>
+    <h1 id="title">解题过程</h1>
+    <p class="lead" id="lead"></p>
+    <div id="stage">正在加载演示…</div>
+  </main>
+  <script src="/vendor/katex/katex.min.js"></script>
+  <script src="/static/plane-scene.js?v=11"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const sceneUrl = params.get("scene") || "";
+    if (!/^\/static\/scenes\/[A-Za-z0-9_./-]+\.json$/.test(sceneUrl) || sceneUrl.indexOf("..") >= 0) {
+      const stage = document.getElementById("stage");
+      stage.className = "plane-error";
+      stage.textContent = "场景地址无效";
+    } else {
+      fetch(sceneUrl, { cache: "no-store" })
+        .then(function (res) {
+          if (!res.ok) throw new Error("场景加载失败");
+          return res.json();
+        })
+        .then(function (scene) {
+          document.getElementById("title").textContent = scene.title || "解题过程";
+          document.getElementById("lead").textContent = scene.meta || "";
+          const stage = document.getElementById("stage");
+          stage.textContent = "";
+          window.PlanePlayer.mount(stage, scene);
+        })
+        .catch(function (err) {
+          const stage = document.getElementById("stage");
+          stage.className = "plane-error";
+          stage.textContent = err && err.message ? err.message : "场景加载失败";
+        });
+    }
+  </script>
+</body>
+</html>

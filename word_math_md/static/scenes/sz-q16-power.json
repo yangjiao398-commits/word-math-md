@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "code": "3.2",
+  "title": "幂函数与奇函数单调性",
+  "meta": "第16题 · 按详解",
+  "view": { "xMin": -4.2, "xMax": 4.2, "yMin": -8, "yMax": 8 },
+  "curves": [
+    {
+      "id": "f-right",
+      "preset": "reciprocal",
+      "reciprocal": { "h": 0, "k": 1 },
+      "domain": { "from": 0.18 },
+      "color": "#2457d6",
+      "label": "y = 1/x",
+      "labelCorner": "right"
+    },
+    {
+      "id": "f-left",
+      "preset": "reciprocal",
+      "reciprocal": { "h": 0, "k": 1 },
+      "domain": { "to": -0.18 },
+      "color": "#2457d6",
+      "label": "y = 1/x",
+      "labelCorner": "left"
+    },
+    {
+      "id": "g-right",
+      "preset": "linear-reciprocal",
+      "linearReciprocal": { "a": 1, "k": 9 },
+      "domain": { "from": 0.55 },
+      "color": "#0f7a4a",
+      "label": "y = x + 9/x",
+      "labelCorner": "right"
+    },
+    {
+      "id": "g-left",
+      "preset": "linear-reciprocal",
+      "linearReciprocal": { "a": 1, "k": 9 },
+      "domain": { "to": -0.55 },
+      "color": "#0f7a4a",
+      "label": "y = x + 9/x",
+      "labelCorner": "left"
+    }
+  ],
+  "steps": [
+    {
+      "id": "point",
+      "title": "设幂函数并代入点",
+      "caption": "详解第一步：设幂函数 f(x) = xᵃ，把图像经过的点 (√5, √5/5) 代入。图上这个点就在后面求出的曲线上。",
+      "formula": [
+        "f(x)=x^{a}",
+        "f(\\sqrt{5})=(\\sqrt{5})^{a}=\\dfrac{\\sqrt{5}}{5}"
+      ],
+      "draw": true,
+      "view": { "xMin": -0.4, "xMax": 4.2, "yMin": -0.6, "yMax": 2.4 },
+      "curve": "f-right",
+      "curves": ["f-right"],
+      "intervals": [],
+      "markers": [{ "x": 2.23606797749979, "name": "点", "tone": "up" }],
+      "guides": [
+        { "x": 2.23606797749979, "label": "x = √5" },
+        { "y": 0.447213595499958, "label": "y = √5/5" }
+      ]
+    },
+    {
+      "id": "expression",
+      "title": "解得 f(x) = 1/x",
+      "caption": "由 (√5)ᵃ = √5/5 得 a = −1。所以 f(x) = x⁻¹ = 1/x。蓝色曲线就是这个反比例函数，左右两支以原点为对称中心。",
+      "formula": ["a=-1", "f(x)=x^{-1}=\\dfrac{1}{x}"],
+      "view": { "xMin": -4.2, "xMax": 4.2, "yMin": -3.2, "yMax": 3.2 },
+      "curve": "f-right",
+      "curves": ["f-left", "f-right"],
+      "intervals": [],
+      "markers": [{ "x": 2.23606797749979, "name": "点", "tone": "up" }],
+      "guides": []
+    },
+    {
+      "id": "build",
+      "title": "写出 g(x)",
+      "caption": "小问 2 由（1）代入：g(x) = 9f(x) + 1/f(x) = 9/x + x。后面的奇偶性和单调性都对这个解析式来证。",
+      "formula": [
+        "g(x)=9f(x)+\\dfrac{1}{f(x)}",
+        "=\\dfrac{9}{x}+x"
+      ],
+      "view": { "xMin": -4.2, "xMax": 4.2, "yMin": -14, "yMax": 14 },
+      "curve": "g-right",
+      "curves": ["g-left", "g-right"],
+      "intervals": [],
+      "markers": [],
+      "guides": []
+    },
+    {
+      "id": "domain",
+      "title": "定义域关于原点对称",
+      "caption": "详解指出 g 的定义域是 (−∞, 0) ∪ (0, +∞)，关于原点对称。这是判断奇偶性的前提。图中左右两支都不经过 y 轴。",
+      "formula": ["x\\in(-\\infty,0)\\cup(0,+\\infty)"],
+      "view": { "xMin": -4.2, "xMax": 4.2, "yMin": -14, "yMax": 14 },
+      "curve": "g-right",
+      "curves": ["g-left", "g-right"],
+      "intervals": [
+        { "from": -4.2, "to": -0.2, "tone": "down", "label": "x < 0" },
+        { "from": 0.2, "to": 4.2, "tone": "up", "label": "x > 0" }
+      ],
+      "markers": [],
+      "guides": [{ "x": 0, "label": "x = 0 无定义" }]
+    },
+    {
+      "id": "odd",
+      "title": "证明 g 是奇函数",
+      "caption": "详解计算 g(−x) = −9/x − x = −(9/x + x) = −g(x)。所以 g 是奇函数。图上关于原点对称，是这个结论的图像。",
+      "formula": [
+        "g(-x)=-\\dfrac{9}{x}-x",
+        "=-\\left(\\dfrac{9}{x}+x\\right)=-g(x)"
+      ],
+      "view": { "xMin": -4.2, "xMax": 4.2, "yMin": -14, "yMax": 14 },
+      "curve": "g-right",
+      "curves": ["g-left", "g-right"],
+      "intervals": [],
+      "markers": [
+        { "x": -2, "name": "−x", "tone": "down" },
+        { "x": 2, "name": "x", "tone": "up" }
+      ],
+      "guides": []
+    },
+    {
+      "id": "difference",
+      "title": "在 (0, 3) 上作差",
+      "caption": "详解在 (0, 3) 内任取 x₁ < x₂，作差：g(x₁) − g(x₂) = (x₁ − x₂)(x₁x₂ − 9)/(x₁x₂)。绿色曲线就是这一段上的 g。",
+      "formula": [
+        "x_{1},x_{2}\\in(0,3),\\ x_{1}<x_{2}",
+        "g(x_{1})-g(x_{2})=\\dfrac{(x_{1}-x_{2})(x_{1}x_{2}-9)}{x_{1}x_{2}}"
+      ],
+      "view": { "xMin": -0.15, "xMax": 3.5, "yMin": 4, "yMax": 16 },
+      "curve": "g-right",
+      "curves": ["g-right"],
+      "intervals": [{ "from": 0.15, "to": 3, "tone": "down", "label": "(0, 3)" }],
+      "markers": [
+        { "x": 1, "name": "x₁", "tone": "down" },
+        { "x": 2, "name": "x₂", "tone": "down" }
+      ],
+      "guides": [{ "x": 3, "label": "x = 3" }]
+    },
+    {
+      "id": "signs",
+      "title": "判断差的符号",
+      "caption": "因为 0 < x₁ < x₂ < 3，所以 x₁ − x₂ < 0，x₁x₂ − 9 < 0，x₁x₂ > 0。分子是两个负数相乘，分母为正，因此 g(x₁) − g(x₂) > 0。",
+      "formula": [
+        "x_{1}-x_{2}<0,\\ x_{1}x_{2}-9<0,\\ x_{1}x_{2}>0",
+        "g(x_{1})-g(x_{2})>0"
+      ],
+      "view": { "xMin": -0.15, "xMax": 3.5, "yMin": 4, "yMax": 16 },
+      "curve": "g-right",
+      "curves": ["g-right"],
+      "intervals": [{ "from": 0.15, "to": 3, "tone": "down", "label": "(0, 3)" }],
+      "markers": [
+        { "x": 1, "name": "x₁", "tone": "down" },
+        { "x": 2, "name": "x₂", "tone": "down" }
+      ],
+      "guides": [{ "x": 3, "label": "x = 3" }]
+    },
+    {
+      "id": "decrease",
+      "title": "(0, 3) 上单调递减",
+      "caption": "由 g(x₁) > g(x₂) 得：x 变大时函数值变小。所以 g(x) = x + 9/x 在 (0, 3) 上单调递减。两点沿曲线向右移动时，左边的点始终更高。",
+      "formula": [
+        "g(x_{1})>g(x_{2})",
+        "g(x)=\\dfrac{9}{x}+x\\ \\text{在 }(0,3)\\text{ 上递减}"
+      ],
+      "view": { "xMin": -0.15, "xMax": 3.5, "yMin": 4, "yMax": 16 },
+      "curve": "g-right",
+      "curves": ["g-right"],
+      "intervals": [{ "from": 0.15, "to": 3, "tone": "down", "label": "递减" }],
+      "markers": [],
+      "motion": { "type": "pair", "x1From": 0.8, "x1To": 1.7, "gap": 0.6, "tone": "down" },
+      "guides": [{ "x": 3, "label": "x = 3" }],
+      "check": { "kind": "motion", "relation": "down" }
+    }
+  ]
+}

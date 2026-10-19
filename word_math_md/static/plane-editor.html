@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>制作解题动画</title>
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css"/>
+  <link rel="stylesheet" href="/static/plane-scene.css?v=3"/>
+  <link rel="stylesheet" href="/static/plane-editor.css?v=1"/>
+</head>
+<body>
+  <header class="editor-bar">
+    <a href="/">返回题库</a>
+    <h1 id="heading">制作解题动画</h1>
+    <button type="button" id="draftBtn">根据题目生成动画</button>
+    <button type="button" id="previewBtn">预览</button>
+    <button type="button" id="saveBtn">保存</button>
+  </header>
+  <p class="editor-status" id="status">正在读取题目…</p>
+  <div class="editor-layout">
+    <section>
+      <p class="stem" id="stem"></p>
+      <label for="source">题干、分析、详解</label>
+      <textarea id="source" placeholder="这里会载入题干、【分析】和【详解】。生成时按其中的函数、点和区间画图。"></textarea>
+      <label for="sceneTitle">动画标题</label>
+      <input id="sceneTitle" type="text" maxlength="80"/>
+      <div id="curveBox">
+        <label for="preset">曲线</label>
+        <select id="preset">
+          <option value="quadratic">二次函数 ax²+bx+c</option>
+          <option value="square">y = x²</option>
+          <option value="exponential">指数 y = aˣ + b</option>
+          <option value="reciprocal">反比例 k/(x−h)</option>
+          <option value="fraction-exp">(aˣ−1)/(aˣ+1)</option>
+          <option value="linear-reciprocal">y = ax + k/x</option>
+        </select>
+        <div id="params" class="params"></div>
+      </div>
+      <div id="steps"></div>
+    </section>
+    <section>
+      <div id="stage" class="editor-stage">先生成草稿或打开已有动画，再点预览。</div>
+    </section>
+  </div>
+  <script src="/vendor/katex/katex.min.js"></script>
+  <script src="/static/plane-scene.js?v=11"></script>
+  <script src="/static/plane-editor.js?v=3"></script>
+</body>
+</html>

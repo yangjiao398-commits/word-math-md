@@ -64,6 +64,13 @@ from word_math_md.knowledge_catalog import (
     update_catalog_item,
 )
 from word_math_md.knowledge_page import page_html as knowledge_page_html
+from word_math_md.plane_scenes import (
+    draft_scene,
+    load_lessons,
+    load_scene,
+    plain_solution,
+    save_scene,
+)
 from word_math_md.knowledge_courseware import (
     delete_courseware,
     list_courseware,
@@ -1334,6 +1341,10 @@ def index() -> str:
           card += '<div class="q-block vs-row no-print">';
           card += '<button type="button" class="vs-open" data-vs-index="' + qi +
             '">可视化解题</button>';
+          if (q.question_id) {{
+            card += '<button type="button" class="vs-open" data-plane-edit="' +
+              esc(q.question_id) + '">制作解题动画</button>';
+          }}
           if (q.question_id && window.QuestionPlane && window.QuestionPlane.lessons[q.question_id]) {{
             card += '<button type="button" class="vs-open" data-plane-q="' +
               esc(q.question_id) + '">解题过程</button>';
@@ -1597,8 +1608,12 @@ def index() -> str:
       analysis.hidden = true;
       result.textContent = '正在读取试卷并渲染题目…';
       try {{
+        const catalogReady = window.QuestionPlane && window.QuestionPlane.refresh
+          ? window.QuestionPlane.refresh()
+          : Promise.resolve();
         const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(paperId) + '/preview');
         const data = await readJson(res);
+        await catalogReady;
         if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
         const paper = data.paper || {{}};
         document.body.classList.add('viewing-paper');
@@ -1617,6 +1632,13 @@ def index() -> str:
       }}
     }}
     questions.addEventListener('click', (ev) => {{
+      const planeEdit = ev.target.closest('[data-plane-edit]');
+      if (planeEdit && questions.contains(planeEdit)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        window.open('/plane-editor?question=' + encodeURIComponent(planeEdit.getAttribute('data-plane-edit') || ''), '_blank');
+        return;
+      }}
       const printBtn = ev.target.closest('#btnPrintPaper');
       if (printBtn && questions.contains(printBtn)) {{
         ev.preventDefault();
@@ -2209,7 +2231,7 @@ def index() -> str:
     }});
   </script>
   <script src="/static/knowledge-courseware.js?v=7"></script>
-  <script src="/static/question-plane.js?v=8"></script>
+  <script src="/static/question-plane.js?v=10"></script>
   <script src="/static/visual-solve.js"></script>
 </body>
 </html>"""
@@ -2727,6 +2749,100 @@ def topic_exponential_demo() -> FileResponse:
 @app.get("/knowledge", response_class=HTMLResponse)
 def knowledge_admin_page() -> str:
     return knowledge_page_html()
+
+
+@app.get("/plane-editor", response_class=HTMLResponse)
+def plane_editor_page() -> FileResponse:
+    page = STATIC_DIR / "plane-editor.html"
+    if not page.is_file():
+        raise HTTPException(404, "解题动画编辑页不存在")
+    return FileResponse(page)
+
+
+class PlaneDraftIn(BaseModel):
+    text: str = ""
+    title: str = "解题过程"
+    stem: str = ""
+    analysis: str = ""
+
+
+class PlaneSceneIn(BaseModel):
+    title: str = "解题过程"
+    scene: dict
+
+
+@app.get("/api/plane-scenes")
+def api_plane_scenes() -> JSONResponse:
+    return JSONResponse({"ok": True, "lessons": load_lessons()})
+
+
+@app.post("/api/plane-scenes/draft")
+def api_plane_scene_draft(body: PlaneDraftIn) -> JSONResponse:
+    scene = draft_scene(body.text, title=body.title, stem=body.stem, analysis=body.analysis)
+    return JSONResponse({"ok": True, "scene": scene})
+
+
+@app.get("/api/plane-scenes/{question_id}/source")
+def api_plane_scene_source(question_id: str) -> JSONResponse:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", question_id or ""):
+        raise HTTPException(400, "无效的题目 id")
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        rows = get_questions_by_ids([question_id])
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    if not rows:
+        raise HTTPException(404, "题目不存在")
+    row = rows[0]
+
+    def math_text(*keys: str) -> str:
+        chosen = ""
+        for key in keys:
+            value = str(row.get(key) or "")
+            if not chosen:
+                chosen = value
+            if "$" in value or "\\" in value:
+                chosen = value
+                break
+        return plain_solution(chosen)
+
+    stem = math_text("stem_md", "stem_text")
+    analysis = math_text("analysis_md")
+    solution = math_text("solution_md")
+    sections = []
+    if stem:
+        sections.append("【题干】\n" + stem)
+    if analysis:
+        sections.append("【分析】\n" + analysis)
+    if solution:
+        sections.append("【详解】\n" + solution)
+    lesson = load_lessons().get(question_id)
+    scene = load_scene(question_id)
+    return JSONResponse(
+        {
+            "ok": True,
+            "question_id": question_id,
+            "question_no": row.get("question_no"),
+            "stem_text": stem,
+            "analysis_text": analysis,
+            "solution_text": solution or analysis,
+            "source_text": "\n\n".join(sections),
+            "lesson": lesson,
+            "scene": scene,
+        }
+    )
+
+
+@app.put("/api/plane-scenes/{question_id}")
+def api_save_plane_scene(question_id: str, body: PlaneSceneIn) -> JSONResponse:
+    try:
+        lesson = save_scene(question_id, body.scene, title=body.title)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "lesson": lesson})
 
 
 @app.get("/practice", response_class=HTMLResponse)

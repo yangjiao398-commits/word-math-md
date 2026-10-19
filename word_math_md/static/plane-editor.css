@@ -1,0 +1,64 @@
+body {
+  margin: 0;
+  color: #1c2430;
+  background: #f4f6f8;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.editor-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e1e6ee;
+}
+.editor-bar h1 {
+  margin: 0;
+  flex: 1;
+  font-size: 1.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-bar a { color: #2a6fdb; }
+.editor-bar button, button.add-step {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #2457d6;
+  color: #fff;
+  cursor: pointer;
+}
+.editor-status { margin: 8px 16px; color: #5c6b7a; }
+.editor-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 460px) 1fr;
+  gap: 16px;
+  padding: 0 16px 24px;
+}
+@media (max-width: 900px) {
+  .editor-layout { grid-template-columns: 1fr; }
+}
+label { display: block; margin: 12px 0 6px; font-weight: 650; }
+textarea, input, select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d5dbe3;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+#source { min-height: 140px; }
+.stem { color: #3d4b5c; line-height: 1.6; }
+.step-card {
+  margin-top: 12px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #e1e6ee;
+  border-radius: 10px;
+}
+.step-card h3 { margin: 0 0 8px; font-size: 0.95rem; }
+.params { display: flex; gap: 8px; }
+.params label { flex: 1; font-weight: 500; }
+.editor-stage { min-height: 280px; }
+.plane-error { color: #c2413a; }

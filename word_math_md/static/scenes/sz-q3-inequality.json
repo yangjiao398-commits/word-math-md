@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "title": "二次不等式与根的分布",
+  "meta": "第3题 · 按详解",
+  "view": { "xMin": -0.8, "xMax": 4.8, "yMin": -4.2, "yMax": 2.4 },
+  "curves": [
+    {
+      "id": "f",
+      "preset": "quadratic",
+      "quadratic": { "a": -1, "b": 4, "c": -3 },
+      "color": "#2457d6",
+      "label": "y = −x² + 4x − 3",
+      "labelCorner": "left"
+    }
+  ],
+  "steps": [
+    {
+      "id": "given",
+      "title": "看清解集",
+      "caption": "题干：不等式 ax² + bx − 3 < 0 的解集是 (−∞, 1) ∪ (3, +∞)。图中涂色的两段就是这个解集，分界点是 x = 1 和 x = 3。",
+      "formula": ["ax^{2}+bx-3<0", "\\left(-\\infty,1\\right)\\cup\\left(3,+\\infty\\right)"],
+      "view": { "xMin": -0.8, "xMax": 4.8, "yMin": -4.2, "yMax": 2.4 },
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [
+        { "from": -0.8, "to": 1, "tone": "down", "label": "(−∞, 1)" },
+        { "from": 3, "to": 4.8, "tone": "down", "label": "(3, +∞)" }
+      ],
+      "markers": [
+        { "x": 1, "name": "1", "tone": "neutral" },
+        { "x": 3, "name": "3", "tone": "neutral" }
+      ],
+      "guides": [
+        { "x": 1, "label": "x = 1" },
+        { "x": 3, "label": "x = 3" }
+      ]
+    },
+    {
+      "id": "opening",
+      "title": "开口向下，a < 0",
+      "caption": "详解的第一个结论：解集在两根外侧，而不是两根之间。二次函数开口向下时，函数值在两根外侧为负，所以 a < 0。图中 (1, 3) 在 x 轴上方，这一段不在解集里。",
+      "formula": ["a<0", "\\text{解集在两根外侧}"],
+      "view": { "xMin": 0.2, "xMax": 3.8, "yMin": -1.2, "yMax": 2.2 },
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [{ "from": 1, "to": 3, "tone": "up", "label": "(1, 3) 上 y > 0" }],
+      "markers": [
+        { "x": 1, "name": "1", "tone": "neutral" },
+        { "x": 3, "name": "3", "tone": "neutral" }
+      ],
+      "guides": []
+    },
+    {
+      "id": "roots",
+      "title": "两根是 1 和 3",
+      "caption": "详解接着写：x = 1 和 x = 3 是方程 ax² + bx − 3 = 0 的根。图像与 x 轴的交点就是这两个根，交点处函数值为 0。",
+      "formula": ["ax^{2}+bx-3=0", "x=1", "x=3"],
+      "view": { "xMin": -0.4, "xMax": 4.4, "yMin": -3.2, "yMax": 2.2 },
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [],
+      "markers": [
+        { "x": 1, "name": "根", "tone": "neutral" },
+        { "x": 3, "name": "根", "tone": "neutral" }
+      ],
+      "guides": [
+        { "x": 1, "label": "x = 1" },
+        { "x": 3, "label": "x = 3" }
+      ]
+    },
+    {
+      "id": "vieta",
+      "title": "根与系数",
+      "caption": "由根与系数的关系，两根之和等于 −b/a，两根之积等于常数项除以 a。常数项是 −3，所以 1 + 3 = −b/a，1 × 3 = −3/a。",
+      "formula": ["1+3=-\\dfrac{b}{a}", "1\\times 3=-\\dfrac{3}{a}"],
+      "view": { "xMin": -0.4, "xMax": 4.4, "yMin": -3.2, "yMax": 2.2 },
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [],
+      "markers": [
+        { "x": 1, "name": "1", "tone": "neutral" },
+        { "x": 3, "name": "3", "tone": "neutral" }
+      ],
+      "guides": []
+    },
+    {
+      "id": "coefficient-a",
+      "title": "求出 a = −1",
+      "caption": "先用积：1 × 3 = −3/a，即 3 = −3/a，所以 a = −1。这和前面得到的 a < 0 一致。",
+      "formula": ["3=-\\dfrac{3}{a}", "a=-1"],
+      "view": { "xMin": -0.4, "xMax": 4.4, "yMin": -3.2, "yMax": 2.2 },
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [],
+      "markers": [
+        { "x": 1, "name": "1", "tone": "neutral" },
+        { "x": 3, "name": "3", "tone": "neutral" }
+      ],
+      "guides": []
+    },
+    {
+      "id": "coefficient-b",
+      "title": "求出 b = 4",
+      "caption": "再用和：1 + 3 = −b/a。把 a = −1 代入，4 = −b/(−1) = b，所以 b = 4。解析式是 y = −x² + 4x − 3，顶点在 (2, 1)。",
+      "formula": ["4=-\\dfrac{b}{a}", "b=4", "y=-x^{2}+4x-3"],
+      "view": { "xMin": -0.4, "xMax": 4.4, "yMin": -3.2, "yMax": 2.4 },
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [],
+      "markers": [{ "x": 2, "name": "顶点", "tone": "up" }],
+      "guides": [
+        { "x": 2, "label": "x = 2" },
+        { "y": 1, "label": "y = 1" }
+      ]
+    },
+    {
+      "id": "difference",
+      "title": "计算 b − a",
+      "caption": "系数都求出来了：a = −1，b = 4。所以 b − a = 4 − (−1) = 5。",
+      "formula": ["b-a=4-(-1)=5"],
+      "view": { "xMin": -0.4, "xMax": 4.4, "yMin": -3.2, "yMax": 2.4 },
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [],
+      "markers": [
+        { "x": 1, "name": "1", "tone": "neutral" },
+        { "x": 3, "name": "3", "tone": "neutral" }
+      ],
+      "guides": []
+    },
+    {
+      "id": "answer",
+      "title": "核对并作答",
+      "caption": "代回检验：−x² + 4x − 3 = −(x − 1)(x − 3)。它小于 0 时 (x − 1)(x − 3) > 0，即 x < 1 或 x > 3，与题干的解集一致。因此 b − a = 5，故选 D。",
+      "formula": ["-(x-1)(x-3)<0", "(x-1)(x-3)>0", "b-a=5,\\ \\text{故选 D}"],
+      "view": { "xMin": -0.8, "xMax": 4.8, "yMin": -4.2, "yMax": 2.4 },
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [
+        { "from": -0.8, "to": 1, "tone": "down", "label": "(−∞, 1)" },
+        { "from": 3, "to": 4.8, "tone": "down", "label": "(3, +∞)" }
+      ],
+      "markers": [
+        { "x": 1, "name": "1", "tone": "neutral" },
+        { "x": 3, "name": "3", "tone": "neutral" }
+      ],
+      "guides": []
+    }
+  ]
+}
