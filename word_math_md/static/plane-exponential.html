@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>指数函数 · plane 演示</title>
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css"/>
+  <link rel="stylesheet" href="/static/plane-scene.css"/>
+</head>
+<body class="plane-page">
+  <main>
+    <p class="kicker">4.2 · 高一上（必修第一册） · 指数函数与对数函数</p>
+    <h1>指数函数</h1>
+    <p class="lead">
+      比较 y = 2^x 和 y = (1/2)^x。两条曲线都经过 (0, 1)，底数不同，增减方向相反。
+      <a href="/knowledge">返回知识点维护</a>
+    </p>
+    <div id="stage">正在加载演示…</div>
+  </main>
+  <script src="/vendor/katex/katex.min.js"></script>
+  <script src="/static/plane-scene.js?v=7"></script>
+  <script>
+    fetch("/static/scenes/exponential-4.2.json")
+      .then(function (res) {
+        if (!res.ok) throw new Error("场景加载失败");
+        return res.json();
+      })
+      .then(function (scene) {
+        document.getElementById("stage").textContent = "";
+        window.PlanePlayer.mount(document.getElementById("stage"), scene);
+      })
+      .catch(function (err) {
+        const stage = document.getElementById("stage");
+        stage.className = "plane-error";
+        stage.textContent = err && err.message ? err.message : "场景加载失败";
+      });
+  </script>
+</body>
+</html>

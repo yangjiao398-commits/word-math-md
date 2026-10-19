@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "code": "4.2",
+  "title": "奇函数与基本不等式",
+  "meta": "第7题 · 按详解",
+  "view": { "xMin": -2.4, "xMax": 2.4, "yMin": -1.35, "yMax": 1.35 },
+  "curves": [
+    {
+      "id": "denom",
+      "preset": "exponential",
+      "base": 3.141592653589793,
+      "add": 1,
+      "color": "#2457d6",
+      "label": "y = πˣ + 1",
+      "labelCorner": "left"
+    },
+    {
+      "id": "f",
+      "preset": "fraction-exp",
+      "base": 3.141592653589793,
+      "color": "#2457d6",
+      "label": "y = (πˣ − 1)/(πˣ + 1)",
+      "labelCorner": "right"
+    },
+    {
+      "id": "line",
+      "preset": "quadratic",
+      "quadratic": { "a": 0, "b": -0.5, "c": 0.5 },
+      "domain": { "from": 0.02, "to": 0.98 },
+      "color": "#0f7a4a",
+      "label": "a + 2b = 1"
+    }
+  ],
+  "steps": [
+    {
+      "id": "domain",
+      "title": "定义域为 R",
+      "caption": "详解第一步：对任意实数 x，πˣ + 1 > 0，所以 f(x) = (πˣ − 1)/(πˣ + 1) 的定义域是全体实数。图中这条曲线就是 y = πˣ + 1，它始终在 x 轴上方。",
+      "formula": ["\\pi^{x}+1>0", "x\\in\\mathbb{R}"],
+      "draw": true,
+      "view": { "xMin": -1.6, "xMax": 2.2, "yMin": -0.8, "yMax": 12 },
+      "curve": "denom",
+      "curves": ["denom"],
+      "intervals": [],
+      "markers": [],
+      "guides": []
+    },
+    {
+      "id": "odd",
+      "title": "证明 f 是奇函数",
+      "caption": "详解接着计算 f(−x)。分子分母同乘 πˣ，得到 (1 − πˣ)/(1 + πˣ)，也就是 −f(x)。所以 f 是奇函数。图上关于原点对称，是这个结论的图像。",
+      "formula": [
+        "f(-x)=\\dfrac{\\pi^{-x}-1}{\\pi^{-x}+1}",
+        "=\\dfrac{\\pi^{x}(\\pi^{-x}-1)}{\\pi^{x}(\\pi^{-x}+1)}",
+        "=\\dfrac{1-\\pi^{x}}{1+\\pi^{x}}=-f(x)"
+      ],
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [],
+      "markers": [
+        { "x": -1, "name": "−x", "tone": "down" },
+        { "x": 1, "name": "x", "tone": "up" }
+      ],
+      "guides": []
+    },
+    {
+      "id": "rewrite",
+      "title": "把 f 改写",
+      "caption": "详解把分子写成 πˣ + 1 − 2，于是 f(x) = (πˣ + 1 − 2)/(πˣ + 1) = 1 − 2/(πˣ + 1)。后面判断单调性就用这个形式。",
+      "formula": [
+        "f(x)=\\dfrac{\\pi^{x}+1-2}{\\pi^{x}+1}",
+        "=1-\\dfrac{2}{\\pi^{x}+1}"
+      ],
+      "curve": "f",
+      "curves": ["f"],
+      "intervals": [],
+      "markers": [],
+      "guides": []
+    },
+    {
+      "id": "increase",
+      "title": "由 y = πˣ + 1 推出 f 递增",
+      "caption": "详解指出 y = πˣ + 1 在实数上是增函数。它变大时，2/(πˣ + 1) 变小，所以 f(x) = 1 − 2/(πˣ + 1) 在实数上是增函数。函数值相等，自变量就相等。",
+      "formula": ["y=\\pi^{x}+1\\ \\text{在 }\\mathbb{R}\\text{ 上递增}", "f\\ \\text{在 }\\mathbb{R}\\text{ 上递增}"],
+      "view": { "xMin": -1.6, "xMax": 2.2, "yMin": -0.8, "yMax": 12 },
+      "curve": "denom",
+      "curves": ["denom"],
+      "intervals": [{ "from": -1.6, "to": 2.2, "tone": "up", "label": "y = πˣ + 1 递增" }],
+      "markers": [],
+      "motion": { "type": "pair", "x1From": -0.6, "x1To": 0.8, "gap": 0.45, "tone": "up" },
+      "guides": [],
+      "check": { "kind": "motion", "relation": "up" }
+    },
+    {
+      "id": "relation",
+      "title": "得出 a + 2b = 1",
+      "caption": "对任意正数 a、b，f(a) + f(2b − 1) = 0。由奇函数，f(a) = −f(2b − 1) = f(1 − 2b)。再由单调递增，a = 1 − 2b，即 a + 2b = 1。横轴是 a，纵轴是 b。",
+      "formula": [
+        "f(a)+f(2b-1)=0",
+        "f(a)=-f(2b-1)=f(1-2b)",
+        "a=1-2b",
+        "a+2b=1"
+      ],
+      "view": { "xMin": -0.2, "xMax": 1.3, "yMin": -0.15, "yMax": 0.75 },
+      "curve": "line",
+      "curves": ["line"],
+      "intervals": [{ "from": 0.02, "to": 0.98, "tone": "up", "label": "a + 2b = 1" }],
+      "markers": [],
+      "guides": []
+    },
+    {
+      "id": "expand",
+      "title": "相乘后展开",
+      "caption": "分析里的下一步：把 2/a + 1/b 与 a + 2b = 1 相乘，再展开。因为 a + 2b = 1，所以 2/a + 1/b = (a + 2b)(2/a + 1/b) = 4 + a/b + 4b/a。",
+      "formula": [
+        "\\dfrac{2}{a}+\\dfrac{1}{b}=(a+2b)\\left(\\dfrac{2}{a}+\\dfrac{1}{b}\\right)",
+        "=4+\\dfrac{a}{b}+\\dfrac{4b}{a}"
+      ],
+      "view": { "xMin": -0.2, "xMax": 1.3, "yMin": -0.15, "yMax": 0.75 },
+      "curve": "line",
+      "curves": ["line"],
+      "intervals": [{ "from": 0.02, "to": 0.98, "tone": "up", "label": "a + 2b = 1" }],
+      "markers": [],
+      "guides": []
+    },
+    {
+      "id": "inequality",
+      "title": "基本不等式",
+      "caption": "展开后用基本不等式：a/b 与 4b/a 相乘得 4，所以 4 + a/b + 4b/a ≥ 4 + 2√(a/b · 4b/a) = 8。",
+      "formula": ["4+\\dfrac{a}{b}+\\dfrac{4b}{a}\\ge 4+2\\sqrt{\\dfrac{a}{b}\\cdot\\dfrac{4b}{a}}=8"],
+      "view": { "xMin": -0.2, "xMax": 1.3, "yMin": -0.15, "yMax": 0.75 },
+      "curve": "line",
+      "curves": ["line"],
+      "intervals": [{ "from": 0.02, "to": 0.98, "tone": "up", "label": "a + 2b = 1" }],
+      "markers": [],
+      "guides": []
+    },
+    {
+      "id": "minimum",
+      "title": "等号与最小值",
+      "caption": "当且仅当 a/b = 4b/a，并且 a + 2b = 1、a > 0、b > 0 时等号成立，即 a = 1/2，b = 1/4。所以 2/a + 1/b 的最小值是 8，故选 D。",
+      "formula": [
+        "\\dfrac{a}{b}=\\dfrac{4b}{a},\\ a+2b=1,\\ a>0,\\ b>0",
+        "a=\\dfrac{1}{2},\\ b=\\dfrac{1}{4}",
+        "\\text{最小值为 }8,\\ \\text{故选 D}"
+      ],
+      "view": { "xMin": -0.2, "xMax": 1.3, "yMin": -0.15, "yMax": 0.75 },
+      "curve": "line",
+      "curves": ["line"],
+      "intervals": [{ "from": 0.02, "to": 0.98, "tone": "up", "label": "a + 2b = 1" }],
+      "markers": [{ "x": 0.5, "name": "等号", "tone": "up" }],
+      "guides": [
+        { "x": 0.5, "label": "a = 1/2" },
+        { "y": 0.25, "label": "b = 1/4" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>第1题 · 全称命题的否定</title>
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css"/>
+  <link rel="stylesheet" href="/static/plane-scene.css?v=3"/>
+  <style>
+    body.plane-embed .kicker,
+    body.plane-embed h1,
+    body.plane-embed .lead { display: none; }
+  </style>
+</head>
+<body class="plane-page">
+  <script>if (location.search.indexOf("embed=1") >= 0) document.body.classList.add("plane-embed");</script>
+  <main>
+    <p class="kicker">1.5 · 全称量词与存在量词</p>
+    <h1>第1题 · 全称命题的否定</h1>
+    <p class="lead">
+      命题 p：对任意 x ∈ [0, 2]，都有 x² + 1 ≥ 1。按详解，否定时把全称改成存在，范围保持不变，不等号取反。
+    </p>
+    <div id="stage">正在加载演示…</div>
+  </main>
+  <script src="/vendor/katex/katex.min.js"></script>
+  <script src="/static/plane-scene.js?v=7"></script>
+  <script>
+    fetch("/static/scenes/sz-q1-negation.json")
+      .then(function (res) {
+        if (!res.ok) throw new Error("场景加载失败");
+        return res.json();
+      })
+      .then(function (scene) {
+        document.getElementById("stage").textContent = "";
+        window.PlanePlayer.mount(document.getElementById("stage"), scene);
+      })
+      .catch(function (err) {
+        const stage = document.getElementById("stage");
+        stage.className = "plane-error";
+        stage.textContent = err && err.message ? err.message : "场景加载失败";
+      });
+  </script>
+</body>
+</html>

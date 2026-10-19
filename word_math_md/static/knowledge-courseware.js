@@ -26,6 +26,7 @@
     dlg = document.createElement("div");
     dlg.id = "cwDialog";
     dlg.hidden = true;
+    dlg.style.cssText = "position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;";
     dlg.innerHTML =
       '<div class="kp-backdrop" id="cwBackdrop"></div>' +
       '<div class="kp-panel cw-panel" role="dialog" aria-labelledby="cwTitle">' +
@@ -35,14 +36,39 @@
       '<ul class="cw-list" id="cwList"></ul>' +
       '<div class="cw-view">' +
       '<iframe id="cwFrame" title="PPT 预览" allowfullscreen></iframe>' +
-      '<p class="muted" id="cwViewHint">选择左侧课件在线预览（Office Online）。也可下载到本地用 PowerPoint 打开。</p>' +
       "</div></div>" +
+      '<p class="muted" id="cwViewHint" style="margin:10px 0 0">选择左侧课件在线预览（Office Online）。也可下载到本地用 PowerPoint 打开。</p>' +
       '<div class="kp-actions">' +
       '<a id="cwDownload" href="#" target="_blank" rel="noopener">下载当前课件</a>' +
       '<button type="button" class="secondary" id="cwClose">关闭</button>' +
       "</div></div>";
     document.body.appendChild(dlg);
-    document.getElementById("cwBackdrop").addEventListener("click", close);
+    const backdrop = document.getElementById("cwBackdrop");
+    const panel = dlg.querySelector(".cw-panel");
+    backdrop.style.cssText = "position:absolute;inset:0;background:rgba(0,0,0,.55);";
+    panel.style.cssText =
+      "position:relative;z-index:1;width:min(1080px,96vw);max-height:92vh;overflow:auto;" +
+      "display:flex;flex-direction:column;background:#1a222c;color:#e8eef5;" +
+      "border:1px solid #2a3542;border-radius:14px;padding:16px;";
+    const frame = document.getElementById("cwFrame");
+    frame.style.cssText = "flex:none;width:100%;height:100%;min-height:0;border:0;border-radius:10px;background:#fff;";
+    const view = dlg.querySelector(".cw-view");
+    if (view) view.style.cssText = "height:min(46vh,460px);min-height:240px;overflow:hidden;";
+    const layout = dlg.querySelector(".cw-layout");
+    if (layout) layout.style.maxHeight = "none";
+    const list = document.getElementById("cwList");
+    if (list) list.style.cssText = "max-height:22vh;overflow:auto;";
+    const actions = dlg.querySelector(".kp-actions");
+    if (actions) {
+      actions.style.cssText = "display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:12px;";
+    }
+    const download = document.getElementById("cwDownload");
+    if (download) {
+      download.style.cssText = "margin-right:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    }
+    const closeBtn = document.getElementById("cwClose");
+    if (closeBtn) closeBtn.style.cssText = "flex:none;white-space:nowrap;";
+    backdrop.addEventListener("click", close);
     document.getElementById("cwClose").addEventListener("click", close);
     return dlg;
   }
@@ -51,6 +77,7 @@
     const dlg = document.getElementById("cwDialog");
     if (!dlg) return;
     dlg.hidden = true;
+    dlg.style.display = "none";
     const frame = document.getElementById("cwFrame");
     if (frame) frame.src = "about:blank";
   }
@@ -104,6 +131,7 @@
     document.getElementById("cwHint").textContent = "知识点：" + cleaned.join("、");
     listEl.innerHTML = "<li class=\"muted\">加载中…</li>";
     dlg.hidden = false;
+    dlg.style.display = "flex";
     const res = await fetch(
       "/api/exam-bank/knowledge-courseware?codes=" + encodeURIComponent(cleaned.join(","))
     );
@@ -131,7 +159,7 @@
           esc(row.title || row.filename) +
           '</button>' +
           (options.manage
-            ? '<button type="button" class="secondary cw-del" style="width:auto;padding:4px 8px;font-size:0.75rem">删除</button>'
+            ? '<button type="button" class="secondary cw-del" style="width:auto;flex:none;white-space:nowrap;padding:4px 8px;font-size:0.75rem">删除</button>'
             : "") +
           '</div><span class="muted">' +
           esc(formatSize(row.byte_size)) +

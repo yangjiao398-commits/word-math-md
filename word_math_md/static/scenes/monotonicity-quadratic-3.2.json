@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "code": "3.2",
+  "title": "开口向下的二次函数",
+  "meta": "高一上（必修第一册） · 函数的概念与性质",
+  "preset": "quadratic",
+  "quadratic": { "a": -1, "b": 2, "c": 3 },
+  "curveLabel": "f(x) = -x² + 2x + 3",
+  "curveLabelAnchor": "right",
+  "curveLatex": "f(x)=-x^{2}+2x+3",
+  "view": { "xMin": -2.2, "xMax": 4.2, "yMin": -2.4, "yMax": 5.6 },
+  "steps": [
+    {
+      "id": "graph",
+      "title": "观察图像",
+      "caption": "函数是 f(x) = -x² + 2x + 3。二次项系数是负数，抛物线开口向下，顶点也不在原点。判断单调性之前，先找出它的对称轴。",
+      "formula": ["f(x)=-x^{2}+2x+3"],
+      "draw": true,
+      "intervals": [],
+      "markers": []
+    },
+    {
+      "id": "axis",
+      "title": "对称轴与顶点",
+      "caption": "配方得到 f(x) = -(x - 1)² + 4。对称轴是直线 x = 1，顶点是 (1, 4)，也是函数的最高点。二次函数的单调区间以这条对称轴为界。",
+      "formula": ["f(x)=-(x-1)^{2}+4", "x=-\\dfrac{b}{2a}=1"],
+      "intervals": [],
+      "markers": [],
+      "guides": [{ "x": 1, "label": "对称轴 x = 1" }],
+      "vertex": { "x": 1, "label": "顶点 (1, 4)" }
+    },
+    {
+      "id": "increase-pair",
+      "title": "对称轴左侧取两点",
+      "caption": "在 (-∞, 1] 上取 x₁ = -1，x₂ = 0。这里 x₁ < x₂，而且 f(x₁) = 0，f(x₂) = 3，函数值变大了。开口向下时，对称轴左侧的割线向上。",
+      "formula": ["x_1<x_2\\Rightarrow f(x_1)<f(x_2)"],
+      "intervals": [{ "from": -2.2, "to": 1, "tone": "up", "label": "(-∞, 1]" }],
+      "markers": [
+        { "x": -1, "name": "x₁", "tone": "up" },
+        { "x": 0, "name": "x₂", "tone": "up" }
+      ],
+      "guides": [{ "x": 1, "label": "对称轴 x = 1" }],
+      "vertex": { "x": 1, "label": "顶点 (1, 4)" },
+      "check": { "kind": "pairs", "pairs": [[[-1, 0], "up"]] }
+    },
+    {
+      "id": "increase-any",
+      "title": "左侧任意两点",
+      "caption": "让这对点在对称轴左侧滑动，并始终保持 x₁ < x₂。函数值一直在升高，所以 f(x) 在 (-∞, 1] 上单调递增。",
+      "formula": ["\\forall x_1,x_2\\le 1,\\ x_1<x_2\\Rightarrow f(x_1)<f(x_2)"],
+      "intervals": [{ "from": -2.2, "to": 1, "tone": "up", "label": "(-∞, 1] 单调递增" }],
+      "markers": [],
+      "motion": { "type": "pair", "x1From": -0.5, "x1To": 0.4, "gap": 0.5, "tone": "up" },
+      "guides": [{ "x": 1, "label": "对称轴 x = 1" }],
+      "vertex": { "x": 1, "label": "顶点" },
+      "check": { "kind": "motion", "relation": "up" }
+    },
+    {
+      "id": "decrease-pair",
+      "title": "对称轴右侧取两点",
+      "caption": "换到 [1, +∞)，取 x₁ = 2，x₂ = 3。此时 x₁ < x₂，但是 f(x₁) = 3，f(x₂) = 0，函数值变小了。过了对称轴，割线改为向下。",
+      "formula": ["x_1<x_2\\Rightarrow f(x_1)>f(x_2)"],
+      "intervals": [{ "from": 1, "to": 4.2, "tone": "down", "label": "[1, +∞)" }],
+      "markers": [
+        { "x": 2, "name": "x₁", "tone": "down" },
+        { "x": 3, "name": "x₂", "tone": "down" }
+      ],
+      "guides": [{ "x": 1, "label": "对称轴 x = 1" }],
+      "vertex": { "x": 1, "label": "顶点 (1, 4)" },
+      "check": { "kind": "pairs", "pairs": [[[2, 3], "down"]] }
+    },
+    {
+      "id": "decrease-any",
+      "title": "右侧任意两点",
+      "caption": "再让两点在对称轴右侧滑动。只要 x₁ < x₂，就有 f(x₁) > f(x₂)。所以 f(x) 在 [1, +∞) 上单调递减。",
+      "formula": ["\\forall x_1,x_2\\ge 1,\\ x_1<x_2\\Rightarrow f(x_1)>f(x_2)"],
+      "intervals": [{ "from": 1, "to": 4.2, "tone": "down", "label": "[1, +∞) 单调递减" }],
+      "markers": [],
+      "motion": { "type": "pair", "x1From": 1.2, "x1To": 2.3, "gap": 0.55, "tone": "down" },
+      "guides": [{ "x": 1, "label": "对称轴 x = 1" }],
+      "vertex": { "x": 1, "label": "顶点" },
+      "check": { "kind": "motion", "relation": "down" }
+    },
+    {
+      "id": "split-by-axis",
+      "title": "单调区间由对称轴分开",
+      "caption": "左侧函数值升高，右侧函数值下降。定义域 ℝ 上两种情况都有，所以 f(x) 在整个定义域上不是单调函数。a < 0 的二次函数，对称轴左侧单调递增，右侧单调递减。",
+      "formula": [
+        "(-\\infty,1]\\text{ 上单调递增}",
+        "[1,+\\infty)\\text{ 上单调递减}"
+      ],
+      "intervals": [
+        { "from": -2.2, "to": 1, "tone": "up", "label": "递增" },
+        { "from": 1, "to": 4.2, "tone": "down", "label": "递减" }
+      ],
+      "markers": [
+        { "x": -0.5, "name": "x₁", "tone": "up" },
+        { "x": 0.5, "name": "x₂", "tone": "up" },
+        { "x": 1.5, "name": "x₃", "tone": "down" },
+        { "x": 2.5, "name": "x₄", "tone": "down" }
+      ],
+      "guides": [{ "x": 1, "label": "x = 1" }],
+      "vertex": { "x": 1, "label": "顶点" },
+      "check": {
+        "kind": "pairs",
+        "pairs": [[[-0.5, 0.5], "up"], [[1.5, 2.5], "down"]]
+      }
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "code": "4.2",
+  "title": "指数函数",
+  "meta": "高一上（必修第一册） · 指数函数与对数函数",
+  "preset": "exponential",
+  "curves": [
+    {
+      "id": "growth",
+      "preset": "exponential",
+      "base": 2,
+      "color": "#2457d6",
+      "label": "y = 2^x",
+      "labelCorner": "right"
+    },
+    {
+      "id": "decay",
+      "preset": "exponential",
+      "base": 0.5,
+      "color": "#c2413a",
+      "label": "y = (1/2)^x",
+      "labelCorner": "left"
+    }
+  ],
+  "view": { "xMin": -2.8, "xMax": 2.8, "yMin": -0.9, "yMax": 7.2 },
+  "steps": [
+    {
+      "id": "through-origin-height",
+      "title": "先看 y = 2^x",
+      "caption": "指数函数是 y = a^x，其中 a > 0 且 a ≠ 1。先取 a = 2。图像经过点 (0, 1)，因为任何非零底数的 0 次方都是 1。",
+      "formula": ["y=2^{x}", "2^{0}=1"],
+      "draw": true,
+      "curves": ["growth"],
+      "curve": "growth",
+      "intervals": [],
+      "markers": [{ "x": 0, "name": "(0, 1)", "tone": "neutral" }]
+    },
+    {
+      "id": "increase-pair",
+      "title": "底数大于 1 时上升",
+      "caption": "在 y = 2^x 上取 x₁ = 0，x₂ = 2。这里 x₁ < x₂，而且函数值从 1 增加到 4，割线向上。",
+      "formula": ["x_1<x_2\\Rightarrow 2^{x_1}<2^{x_2}"],
+      "curves": ["growth"],
+      "curve": "growth",
+      "intervals": [],
+      "markers": [
+        { "x": 0, "name": "x₁", "tone": "up" },
+        { "x": 2, "name": "x₂", "tone": "up" }
+      ],
+      "check": { "kind": "pairs", "pairs": [[[0, 2], "up"]], "curve": "growth" }
+    },
+    {
+      "id": "increase-any",
+      "title": "定义域上一直递增",
+      "caption": "让这两点沿图像滑动，并始终保持 x₁ < x₂。函数值一直在变大，所以 a > 1 时，指数函数在整个实数集上单调递增。",
+      "formula": ["a>1\\Rightarrow y=a^{x}\\text{ 在 }\\mathbb{R}\\text{ 上单调递增}"],
+      "curves": ["growth"],
+      "curve": "growth",
+      "intervals": [],
+      "markers": [],
+      "motion": { "type": "pair", "x1From": -1.2, "x1To": 0.7, "gap": 0.9, "tone": "up" },
+      "check": { "kind": "motion", "relation": "up", "curve": "growth" }
+    },
+    {
+      "id": "above-axis",
+      "title": "图像始终在 x 轴上方",
+      "caption": "x = -2 时函数值是 0.25，x = 2 时函数值是 4。往左走，图像越来越靠近 x 轴，但不会落到 x 轴上，更不会跑到 x 轴下面。值域是 (0, +∞)。",
+      "formula": ["2^{-2}=\\dfrac{1}{4}>0", "\\text{值域 }(0,+\\infty)"],
+      "curves": ["growth"],
+      "curve": "growth",
+      "intervals": [],
+      "markers": [
+        { "x": -2, "name": "x₁", "tone": "neutral" },
+        { "x": 2, "name": "x₂", "tone": "neutral" }
+      ],
+      "guides": [{ "y": 0, "label": "渐近线 y = 0" }],
+      "check": { "kind": "positive", "xs": [-2, 0, 2], "curve": "growth" }
+    },
+    {
+      "id": "decay-pair",
+      "title": "底数在 0 和 1 之间时下降",
+      "caption": "把底数换成 1/2。y = (1/2)^x 仍经过 (0, 1)。取 x₁ = 0，x₂ = 2，函数值从 1 降到 0.25，割线向下。",
+      "formula": ["y=\\left(\\dfrac{1}{2}\\right)^{x}", "\\left(\\dfrac{1}{2}\\right)^{2}=\\dfrac{1}{4}"],
+      "curves": ["decay"],
+      "curve": "decay",
+      "intervals": [],
+      "markers": [
+        { "x": 0, "name": "x₁", "tone": "down" },
+        { "x": 2, "name": "x₂", "tone": "down" }
+      ],
+      "check": { "kind": "pairs", "pairs": [[[0, 2], "down"]], "curve": "decay" }
+    },
+    {
+      "id": "decay-any",
+      "title": "这时在定义域上递减",
+      "caption": "两点沿 y = (1/2)^x 滑动。只要 x₁ < x₂，函数值就变小。所以 0 < a < 1 时，指数函数在 ℝ 上单调递减。",
+      "formula": ["0<a<1\\Rightarrow y=a^{x}\\text{ 在 }\\mathbb{R}\\text{ 上单调递减}"],
+      "curves": ["decay"],
+      "curve": "decay",
+      "intervals": [],
+      "markers": [],
+      "motion": { "type": "pair", "x1From": -0.6, "x1To": 1.1, "gap": 0.8, "tone": "down" },
+      "check": { "kind": "motion", "relation": "down", "curve": "decay" }
+    },
+    {
+      "id": "compare",
+      "title": "两种底数对照",
+      "caption": "两条图像都经过 (0, 1)，都在 x 轴上方，并且关于 y 轴对称，因为 (1/2)^x = 2^{-x}。a > 1 时单调递增，0 < a < 1 时单调递减。",
+      "formula": ["\\left(\\dfrac{1}{2}\\right)^{x}=2^{-x}", "a>1\\text{ 递增，}0<a<1\\text{ 递减}"],
+      "curves": ["growth", "decay"],
+      "curve": "growth",
+      "intervals": [],
+      "markers": [{ "x": 0, "name": "(0, 1)", "tone": "neutral" }],
+      "guides": [{ "y": 0, "label": "渐近线 y = 0" }]
+    }
+  ]
+}

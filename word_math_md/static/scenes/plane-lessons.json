@@ -1,0 +1,21 @@
+{
+  "3.2": [
+    {
+      "id": "square",
+      "title": "f(x) = x² 的单调性",
+      "href": "/static/plane-monotonicity.html"
+    },
+    {
+      "id": "quadratic",
+      "title": "开口向下的二次函数",
+      "href": "/static/plane-monotonicity-quadratic.html"
+    }
+  ],
+  "4.2": [
+    {
+      "id": "exponential",
+      "title": "指数函数 y = a^x",
+      "href": "/static/plane-exponential.html"
+    }
+  ]
+}

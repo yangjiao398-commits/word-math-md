@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "code": "3.2",
+  "title": "函数的单调性",
+  "meta": "高一上（必修第一册） · 函数的概念与性质",
+  "preset": "square",
+  "curveLatex": "f(x)=x^{2}",
+  "view": { "xMin": -2.8, "xMax": 2.8, "yMin": -0.8, "yMax": 6.2 },
+  "steps": [
+    {
+      "id": "graph",
+      "title": "观察图像",
+      "caption": "先画出函数 f(x) = x²。图像是关于 y 轴对称的抛物线，顶点在原点。下面用它看单调性：比较的是同一个区间里，自变量变大时函数值怎么变。",
+      "formula": ["f(x)=x^{2}"],
+      "draw": true,
+      "intervals": [],
+      "markers": []
+    },
+    {
+      "id": "decrease-pair",
+      "title": "左侧取两点",
+      "caption": "在区间 [-2, 0] 上取 x₁ = -2，x₂ = -1。这里 x₁ < x₂，但是 f(x₁) = 4，f(x₂) = 1，函数值变小了。连接两点的割线向下。",
+      "formula": ["x_1<x_2\\Rightarrow f(x_1)>f(x_2)"],
+      "intervals": [{ "from": -2, "to": 0, "tone": "down", "label": "[-2, 0]" }],
+      "markers": [
+        { "x": -2, "name": "x₁", "tone": "down" },
+        { "x": -1, "name": "x₂", "tone": "down" }
+      ],
+      "check": { "kind": "pairs", "pairs": [[[-2, -1], "down"]] }
+    },
+    {
+      "id": "decrease-any",
+      "title": "左侧任意两点",
+      "caption": "把这对点在 [-2, 0] 上滑动，并始终保持 x₁ < x₂。函数值一直是左边更高，割线一直向下。所以 f(x) 在 [-2, 0] 上单调递减。",
+      "formula": ["\\forall x_1,x_2\\in[-2,0],\\ x_1<x_2\\Rightarrow f(x_1)>f(x_2)"],
+      "intervals": [{ "from": -2, "to": 0, "tone": "down", "label": "[-2, 0] 单调递减" }],
+      "markers": [],
+      "motion": { "type": "pair", "x1From": -2, "x1To": -0.7, "gap": 0.55, "tone": "down" },
+      "check": { "kind": "motion", "relation": "down" }
+    },
+    {
+      "id": "increase-pair",
+      "title": "右侧取两点",
+      "caption": "换到区间 [0, 2]，取 x₁ = 0.5，x₂ = 1.5。此时 x₁ < x₂，而且 f(x₁) = 0.25，f(x₂) = 2.25，函数值变大了。割线向上。",
+      "formula": ["x_1<x_2\\Rightarrow f(x_1)<f(x_2)"],
+      "intervals": [{ "from": 0, "to": 2, "tone": "up", "label": "[0, 2]" }],
+      "markers": [
+        { "x": 0.5, "name": "x₁", "tone": "up" },
+        { "x": 1.5, "name": "x₂", "tone": "up" }
+      ],
+      "check": { "kind": "pairs", "pairs": [[[0.5, 1.5], "up"]] }
+    },
+    {
+      "id": "increase-any",
+      "title": "右侧任意两点",
+      "caption": "再让两点在 [0, 2] 上滑动。只要 x₁ < x₂，就有 f(x₁) < f(x₂)。所以 f(x) 在 [0, 2] 上单调递增。",
+      "formula": ["\\forall x_1,x_2\\in[0,2],\\ x_1<x_2\\Rightarrow f(x_1)<f(x_2)"],
+      "intervals": [{ "from": 0, "to": 2, "tone": "up", "label": "[0, 2] 单调递增" }],
+      "markers": [],
+      "motion": { "type": "pair", "x1From": 0.15, "x1To": 1.35, "gap": 0.55, "tone": "up" },
+      "check": { "kind": "motion", "relation": "up" }
+    },
+    {
+      "id": "not-on-domain",
+      "title": "整个定义域并不单调",
+      "caption": "左边这对点函数值在下降，右边这对点函数值在上升。定义域 ℝ 上两种情况都有，所以不能说 f(x) = x² 在整个定义域上单调。单调性必须连同区间一起说。",
+      "formula": ["f(x)=x^{2}\\text{ 在 }\\mathbb{R}\\text{ 上不是单调函数}"],
+      "intervals": [
+        { "from": -2, "to": 0, "tone": "down", "label": "递减" },
+        { "from": 0, "to": 2, "tone": "up", "label": "递增" }
+      ],
+      "markers": [
+        { "x": -1.6, "name": "x₁", "tone": "down" },
+        { "x": -0.7, "name": "x₂", "tone": "down" },
+        { "x": 0.6, "name": "x₃", "tone": "up" },
+        { "x": 1.5, "name": "x₄", "tone": "up" }
+      ],
+      "check": {
+        "kind": "pairs",
+        "pairs": [[[-1.6, -0.7], "down"], [[0.6, 1.5], "up"]]
+      }
+    },
+    {
+      "id": "definition",
+      "title": "单调性的定义",
+      "caption": "设区间 D 在定义域内。若 D 中任意 x₁ < x₂ 都有 f(x₁) < f(x₂)，则 f 在 D 上单调递增；若都有 f(x₁) > f(x₂)，则 f 在 D 上单调递减。",
+      "formula": [
+        "x_1<x_2\\Rightarrow f(x_1)<f(x_2)\\quad\\text{单调递增}",
+        "x_1<x_2\\Rightarrow f(x_1)>f(x_2)\\quad\\text{单调递减}"
+      ],
+      "intervals": [
+        { "from": -2, "to": 0, "tone": "down", "label": "递减" },
+        { "from": 0, "to": 2, "tone": "up", "label": "递增" }
+      ],
+      "markers": []
+    }
+  ]
+}

@@ -61,7 +61,7 @@ PAGE_HTML = r"""<!doctype html>
       border: 1px solid var(--line); background: #12181f; color: var(--ink);
     }
   </style>
-  <link rel="stylesheet" href="/static/knowledge-courseware.css"/>
+  <link rel="stylesheet" href="/static/knowledge-courseware.css?v=2"/>
 </head>
 <body>
   <main>
@@ -72,6 +72,7 @@ PAGE_HTML = r"""<!doctype html>
       每个知识点可上传多份本地 <strong>PPT/PPTX</strong> 课件，文件保存在 Supabase Storage，元数据在
       <code>knowledge_point_courseware</code>。
       给题目勾选后才写入关联表 <code>question_knowledge_points</code>。
+      已经做好平面演示的知识点，在该行可以打开<strong>动画演示</strong>。
       <a href="/">返回转换首页</a>
       · <a href="/practice">知识点专项训练</a>
     </p>
@@ -127,6 +128,7 @@ PAGE_HTML = r"""<!doctype html>
     const tableWrap = document.getElementById('tableWrap');
     const cwFile = document.getElementById('cwFile');
     let rows = [];
+    let lessonsByCode = {};
     let cwUploadCode = '';
     function esc(s) {
       return String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -149,20 +151,37 @@ PAGE_HTML = r"""<!doctype html>
         tableWrap.innerHTML = '<p class="muted">没有匹配的知识点。</p>';
         return;
       }
-      tableWrap.innerHTML = '<table><thead><tr><th>编号</th><th>学期</th><th>大类</th><th>小类</th><th>引用</th><th>PPT</th><th></th></tr></thead><tbody>' +
-        shown.map(r => '<tr data-code="' + esc(r.code) + '"><td>' + esc(r.code) +
+      tableWrap.innerHTML = '<table><thead><tr><th>编号</th><th>学期</th><th>大类</th><th>小类</th><th>动画</th><th>引用</th><th>PPT</th><th></th></tr></thead><tbody>' +
+        shown.map(r => {
+          const lessons = lessonsByCode[r.code] || [];
+          const anim = lessons.length
+            ? '<button type="button" class="secondary" data-anim>动画演示</button>'
+            : '<span class="muted">—</span>';
+          return '<tr data-code="' + esc(r.code) + '"><td>' + esc(r.code) +
           '</td><td>' + esc(r.semester || '') + '</td><td>' + esc(r.major_category || '') +
           '</td><td>' + esc(r.minor_category || '') +
+          '</td><td class="actions">' + anim +
           '</td><td>' + esc(r.question_count || 0) +
           '</td><td class="actions">' + esc(r.courseware_count || 0) +
           ' <button type="button" class="secondary" data-cw-view>浏览</button>' +
           ' <button type="button" class="secondary" data-cw-upload>上传</button></td><td class="actions">' +
           '<button type="button" class="secondary" data-edit>修改</button>' +
-          '<button type="button" class="danger" data-del>删除</button></td></tr>'
-        ).join('') + '</tbody></table>';
+          '<button type="button" class="danger" data-del>删除</button></td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+    async function loadLessons() {
+      try {
+        const res = await fetch('/static/scenes/plane-lessons.json?v=3');
+        if (!res.ok) return;
+        const data = await res.json();
+        lessonsByCode = data && typeof data === 'object' ? data : {};
+      } catch (e) {
+        lessonsByCode = {};
+      }
     }
     async function reload() {
       tableWrap.textContent = '加载中…';
+      await loadLessons();
       const res = await fetch('/api/exam-bank/knowledge-points?with_usage=1');
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
@@ -263,6 +282,20 @@ PAGE_HTML = r"""<!doctype html>
         cwFile.click();
         return;
       }
+      if (ev.target.closest('[data-anim]')) {
+        const lessons = lessonsByCode[code] || [];
+        if (!window.KnowledgeAnimations) {
+          setStatus('动画脚本没有加载，请刷新本页后再点「动画演示」。');
+          return;
+        }
+        if (!lessons.length) {
+          setStatus('知识点 ' + code + ' 还没有动画。');
+          return;
+        }
+        window.KnowledgeAnimations.open(code, lessons);
+        setStatus('已打开知识点 ' + code + ' 的动画演示。');
+        return;
+      }
       if (ev.target.closest('[data-cw-view]')) {
         if (window.KnowledgeCourseware) {
           window.KnowledgeCourseware.openForCodes([code], code + ' · PPT 课件', { manage: true }).catch(err => {
@@ -311,7 +344,8 @@ PAGE_HTML = r"""<!doctype html>
       tableWrap.innerHTML = '<p>加载失败: ' + esc(err.message) + '</p>';
     });
   </script>
-  <script src="/static/knowledge-courseware.js"></script>
+  <script src="/static/knowledge-animations.js?v=2"></script>
+  <script src="/static/knowledge-courseware.js?v=7"></script>
 </body>
 </html>
 """

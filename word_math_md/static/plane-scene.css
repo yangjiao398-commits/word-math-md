@@ -1,0 +1,162 @@
+.plane-page {
+  margin: 0;
+  min-height: 100vh;
+  color: #1c2430;
+  background: #f4f6f8;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.plane-page main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 28px 20px 48px;
+}
+.plane-page .kicker {
+  margin: 0 0 6px;
+  color: #2a6fdb;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+.plane-page h1 {
+  margin: 0 0 8px;
+  font-size: 1.7rem;
+  font-weight: 680;
+}
+.plane-page .lead {
+  margin: 0 0 16px;
+  color: #5c6b7a;
+  line-height: 1.6;
+}
+.plane-page a { color: #2a6fdb; }
+.plane {
+  background: #fff;
+  border: 1px solid #e1e6ee;
+  border-radius: 12px;
+  padding: 12px 12px 14px;
+}
+.plane canvas {
+  display: block;
+  width: 100%;
+  height: 420px;
+  background: #fbfcfe;
+  border-radius: 8px;
+}
+.plane-readout {
+  min-height: 1.4em;
+  margin: 10px 2px 0;
+  color: #1c2430;
+  font-variant-numeric: tabular-nums;
+}
+.plane-title {
+  margin: 12px 2px 4px;
+  font-weight: 680;
+}
+.plane-caption {
+  margin: 0 2px;
+  line-height: 1.65;
+  color: #243040;
+}
+.plane-formula {
+  margin: 8px 2px 0;
+  min-height: 1.6em;
+  overflow-x: auto;
+}
+.plane-formula .katex { font-size: 1.12em; }
+.plane-formula .line { margin: 4px 0; }
+.plane-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+.plane-controls button {
+  padding: 8px 14px;
+  border: 1px solid #d5dce6;
+  border-radius: 8px;
+  background: #fff;
+  color: #1c2430;
+  font: inherit;
+  cursor: pointer;
+}
+.plane-controls button.primary {
+  background: #2a6fdb;
+  border-color: #2a6fdb;
+  color: #fff;
+}
+.plane-controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.plane-count {
+  margin-left: auto;
+  color: #5c6b7a;
+  font-size: 0.92rem;
+}
+.plane-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.plane-jumps button {
+  padding: 5px 8px;
+  border: 1px solid #e1e6ee;
+  border-radius: 999px;
+  background: #fff;
+  color: #3d4b5c;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.plane-jumps button[aria-current="true"] {
+  background: #e8f1fc;
+  border-color: #2a6fdb;
+  color: #1c2430;
+}
+.plane-error {
+  color: #9f2d2d;
+}
+html:has(body.plane-embed),
+body.plane-embed {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+body.plane-embed main {
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  padding: 8px 12px 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+body.plane-embed #stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+body.plane-embed .plane {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+body.plane-embed .plane canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 0;
+  min-height: 120px;
+}
+body.plane-embed .plane-caption,
+body.plane-embed .plane-formula {
+  flex: none;
+  overflow: visible;
+  max-height: none;
+}
+body.plane-embed .plane-controls,
+body.plane-embed .plane-jumps {
+  flex: none;
+}

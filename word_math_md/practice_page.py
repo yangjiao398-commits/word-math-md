@@ -673,7 +673,7 @@ PAGE_HTML = r"""<!doctype html>
       kpGroups.innerHTML = '<p>加载失败: ' + esc(err.message) + '</p>';
     });
   </script>
-  <script src="/static/knowledge-courseware.js"></script>
+  <script src="/static/knowledge-courseware.js?v=7"></script>
 </body>
 </html>
 """

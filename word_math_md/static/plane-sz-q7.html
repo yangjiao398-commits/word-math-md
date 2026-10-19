@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>第7题 · 奇函数与基本不等式</title>
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css"/>
+  <link rel="stylesheet" href="/static/plane-scene.css?v=3"/>
+  <style>
+    body.plane-embed .kicker,
+    body.plane-embed h1,
+    body.plane-embed .lead { display: none; }
+  </style>
+</head>
+<body class="plane-page">
+  <script>if (location.search.indexOf("embed=1") >= 0) document.body.classList.add("plane-embed");</script>
+  <main>
+    <p class="kicker">函数的性质 · 基本不等式</p>
+    <h1>第7题 · 奇函数与基本不等式</h1>
+    <p class="lead">
+      f(x) = (πˣ − 1)/(πˣ + 1)。对任意正数 a、b 有 f(a) + f(2b − 1) = 0，求 2/a + 1/b 的最小值。
+    </p>
+    <div id="stage">正在加载演示…</div>
+  </main>
+  <script src="/vendor/katex/katex.min.js"></script>
+  <script src="/static/plane-scene.js?v=10"></script>
+  <script>
+    fetch("/static/scenes/sz-q7-minimum.json?v=2")
+      .then(function (res) {
+        if (!res.ok) throw new Error("场景加载失败");
+        return res.json();
+      })
+      .then(function (scene) {
+        document.getElementById("stage").textContent = "";
+        window.PlanePlayer.mount(document.getElementById("stage"), scene);
+      })
+      .catch(function (err) {
+        const stage = document.getElementById("stage");
+        stage.className = "plane-error";
+        stage.textContent = err && err.message ? err.message : "场景加载失败";
+      });
+  </script>
+</body>
+</html>

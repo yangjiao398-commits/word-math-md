@@ -75,3 +75,43 @@
   border-radius: 10px;
   background: #0d1218;
 }
+#animDialog {
+  position: fixed;
+  inset: 0;
+  z-index: 36;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#animDialog[hidden] { display: none; }
+#animDialog .kp-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); }
+#animDialog .anim-panel {
+  position: relative;
+  width: min(1080px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  background: #1a222c;
+  color: #e8eef5;
+  border: 1px solid #2a3542;
+  border-radius: 14px;
+  padding: 16px 16px 12px;
+}
+#animDialog h3 { margin: 0 0 8px; font-size: 1.05rem; }
+#animDialog .summary { margin: 0 0 12px; color: #8b9aab; }
+#animFrame {
+  flex: 1;
+  width: 100%;
+  min-height: 460px;
+  border: 1px solid #2a3542;
+  border-radius: 10px;
+  background: #f4f6f8;
+}
+#animDialog .anim-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 12px;
+}
+#animDialog .anim-actions a { color: #3d9cf0; margin-right: auto; }
+#animDialog .anim-actions button { width: auto; padding: 8px 16px; }

@@ -1334,6 +1334,10 @@ def index() -> str:
           card += '<div class="q-block vs-row no-print">';
           card += '<button type="button" class="vs-open" data-vs-index="' + qi +
             '">可视化解题</button>';
+          if (q.question_id && window.QuestionPlane && window.QuestionPlane.lessons[q.question_id]) {{
+            card += '<button type="button" class="vs-open" data-plane-q="' +
+              esc(q.question_id) + '">解题过程</button>';
+          }}
           card += '<span class="muted">动画演示审题、建模与求解思路</span>';
           card += '</div>';
         }}
@@ -2204,7 +2208,8 @@ def index() -> str:
       }}
     }});
   </script>
-  <script src="/static/knowledge-courseware.js"></script>
+  <script src="/static/knowledge-courseware.js?v=7"></script>
+  <script src="/static/question-plane.js?v=8"></script>
   <script src="/static/visual-solve.js"></script>
 </body>
 </html>"""
@@ -2690,6 +2695,33 @@ def api_practice_preview(body: PracticePreviewIn) -> JSONResponse:
     data["title"] = title
     data["questions"] = parsed
     return JSONResponse(data)
+
+
+@app.get("/topics/3.2")
+def topic_monotonicity_demo() -> FileResponse:
+    """Plane-engine lesson for knowledge point 3.2, monotonicity."""
+    page = Path(__file__).resolve().parent / "static" / "plane-monotonicity.html"
+    if not page.is_file():
+        raise HTTPException(404, "单调性演示页面不存在")
+    return FileResponse(page)
+
+
+@app.get("/topics/3.2/quadratic")
+def topic_quadratic_monotonicity_demo() -> FileResponse:
+    """Plane-engine lesson: monotonicity of a downward quadratic."""
+    page = Path(__file__).resolve().parent / "static" / "plane-monotonicity-quadratic.html"
+    if not page.is_file():
+        raise HTTPException(404, "二次函数单调性演示页面不存在")
+    return FileResponse(page)
+
+
+@app.get("/topics/4.2")
+def topic_exponential_demo() -> FileResponse:
+    """Plane-engine lesson for knowledge point 4.2, exponential functions."""
+    page = Path(__file__).resolve().parent / "static" / "plane-exponential.html"
+    if not page.is_file():
+        raise HTTPException(404, "指数函数演示页面不存在")
+    return FileResponse(page)
 
 
 @app.get("/knowledge", response_class=HTMLResponse)

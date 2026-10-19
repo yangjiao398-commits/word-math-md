@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "code": "1.5",
+  "title": "全称命题的否定",
+  "meta": "第1题 · 全称量词与存在量词",
+  "preset": "quadratic",
+  "quadratic": { "a": 1, "b": 0, "c": 1 },
+  "curveLabel": "y = x² + 1",
+  "curveLabelAnchor": "right",
+  "view": { "xMin": -0.6, "xMax": 2.8, "yMin": -0.5, "yMax": 6.4 },
+  "steps": [
+    {
+      "id": "graph",
+      "title": "画出函数",
+      "caption": "命题里的条件是 x² + 1 ≥ 1。先把它看成函数 y = x² + 1。这是一条开口向上的抛物线，顶点在 (0, 1)。",
+      "formula": ["y=x^{2}+1"],
+      "draw": true,
+      "intervals": [],
+      "markers": [],
+      "vertex": { "x": 0, "label": "顶点 (0, 1)" }
+    },
+    {
+      "id": "domain",
+      "title": "读出全称命题",
+      "caption": "命题 p 说：区间 [0, 2] 里的每一个 x，都满足 x² + 1 ≥ 1。绿色带是 x 的取值范围，虚线是 y = 1。原命题要求曲线在这条带里始终不低于虚线。",
+      "formula": ["p:\\ \\forall x\\in[0,2],\\ x^{2}+1\\ge 1"],
+      "intervals": [{ "from": 0, "to": 2, "tone": "up", "label": "[0, 2]" }],
+      "markers": [],
+      "guides": [{ "y": 1, "label": "y = 1" }],
+      "vertex": { "x": 0, "label": "(0, 1)" }
+    },
+    {
+      "id": "endpoints",
+      "title": "看区间两端",
+      "caption": "左端 x₁ = 0 时，函数值正好是 1，落在虚线上。右端 x₂ = 2 时，函数值是 5，在虚线上方。题目要写的是否定，不是判断 p 的真假；先看清原命题在图上的意思。",
+      "formula": ["f(0)=1", "f(2)=5"],
+      "intervals": [{ "from": 0, "to": 2, "tone": "up", "label": "[0, 2]" }],
+      "markers": [
+        { "x": 0, "name": "x₁", "tone": "up" },
+        { "x": 2, "name": "x₂", "tone": "up" }
+      ],
+      "guides": [{ "y": 1, "label": "y = 1" }],
+      "check": { "kind": "pairs", "pairs": [[[0, 2], "up"]] }
+    },
+    {
+      "id": "quantifier",
+      "title": "只改量词",
+      "caption": "全称命题的否定：把「每一个」改成「存在一个」，取值范围保持 [0, 2]。不能把 ∈ 改成 ∉，也不能把数 x 写成集合关系 ⊂。A、B 仍是全称，C 把范围改到了区间外面，都不符合这一步。",
+      "formula": ["\\neg(\\forall x\\in A,\\ Q(x))=\\exists x\\in A,\\ \\neg Q(x)"],
+      "intervals": [{ "from": 0, "to": 2, "tone": "up", "label": "范围不变" }],
+      "markers": [],
+      "guides": [{ "y": 1, "label": "y = 1" }]
+    },
+    {
+      "id": "predicate",
+      "title": "再否定结论",
+      "caption": "结论 x² + 1 ≥ 1 的否定是 x² + 1 < 1。量词、范围、不等号合在一起，p 的否定就是：存在 x ∈ [0, 2]，使得 x² + 1 < 1。这就是选项 D。",
+      "formula": ["\\neg p:\\ \\exists x\\in[0,2],\\ x^{2}+1<1"],
+      "intervals": [{ "from": 0, "to": 2, "tone": "up", "label": "[0, 2]" }],
+      "markers": [],
+      "guides": [{ "y": 1, "label": "y = 1" }]
+    },
+    {
+      "id": "below",
+      "title": "对照图像",
+      "caption": "否定命题的意思是：绿色带里有一个点落到虚线下方。这条曲线的最低点是 (0, 1)，刚好在虚线上，带里没有更低的点。所以否定命题是假的，原命题是真的。选项仍选 D，因为 D 写的是这个否定，不是它的真假。",
+      "formula": ["\\exists x\\in[0,2],\\ x^{2}+1<1", "\\text{故选 D}"],
+      "intervals": [{ "from": 0, "to": 2, "tone": "up", "label": "[0, 2]" }],
+      "markers": [],
+      "guides": [{ "y": 1, "label": "y = 1" }],
+      "vertex": { "x": 0, "label": "最低点 (0, 1)" }
+    }
+  ]
+}
