@@ -1343,11 +1343,11 @@ def index() -> str:
             '">可视化解题</button>';
           if (q.question_id) {{
             card += '<button type="button" class="vs-open" data-plane-edit="' +
-              esc(q.question_id) + '">制作解题动画</button>';
+              esc(q.question_id) + '">简易解题动画</button>';
           }}
           if (q.question_id && window.QuestionPlane && window.QuestionPlane.lessons[q.question_id]) {{
             card += '<button type="button" class="vs-open" data-plane-q="' +
-              esc(q.question_id) + '">解题过程</button>';
+              esc(q.question_id) + '">cursor解题动画</button>';
           }}
           card += '<span class="muted">动画演示审题、建模与求解思路</span>';
           card += '</div>';

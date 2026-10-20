@@ -13,10 +13,13 @@ def test_draft_reads_spaced_exam_latex_for_a_quadratic_inequality() -> None:
     assert curve["preset"] == "quadratic"
     assert curve["quadratic"] == {"a": -1.0, "b": 4.0, "c": -3.0}
     step = scene["steps"][0]
-    assert [item["name"] for item in step["markers"]] == ["x=1", "x=3"]
-    assert [item["label"] for item in step["intervals"]] == ["(-∞, 1)", "(3, +∞)"]
+    assert [item["name"] for item in step["markers"]] == ["1", "3"]
+    assert [item["label"] for item in step["intervals"]] == ["(−∞, 1)", "(3, +∞)"]
     assert all(item["tone"] == "down" for item in step["intervals"])
-    assert "解集" in step["caption"]
+    assert "ax² + bx − 3 < 0" in step["caption"]
+    assert "(−∞, 1) ∪ (3, +∞)" in step["caption"]
+    assert step["formula"][0] == "ax^{2}+bx-3<0"
+    assert step["view"]["yMin"] <= -4
     titles = [item["title"] for item in scene["steps"]]
     assert titles[:4] == ["看清解集", "开口向下，a < 0", "两根是 1 和 3", "根与系数"]
     vieta = " ".join(next(item for item in scene["steps"] if item["id"] == "vieta")["formula"])
@@ -28,6 +31,10 @@ def test_draft_reads_spaced_exam_latex_for_a_quadratic_inequality() -> None:
     difference = next(item for item in scene["steps"] if item["id"] == "difference")["caption"]
     assert "b − a" in difference
     assert "= 5" in difference
+    answer = next(item for item in scene["steps"] if item["id"] == "answer")
+    assert "−(x − 1)(x − 3)" in answer["caption"]
+    assert "-(x-1)(x-3)<0" in answer["formula"]
+    assert "(x-1)(x-3)>0" in answer["formula"]
 
 
 def test_draft_reads_a_point_reciprocal_and_monotonicity() -> None:
@@ -57,7 +64,7 @@ def test_draft_reads_a_point_reciprocal_and_monotonicity() -> None:
 
 def test_draft_splits_a_piecewise_function_at_its_break() -> None:
     scene = plane_scenes.draft_scene(
-        r"已知函数 $f\left ( { x } \right )=\left \{ \begin{array}{l} x ^ { 2 } -1,x\le 1, \\ \frac { 1 } { x-1 },x&gt;1, \end{array} \right.$"
+        r"已知函数 $f\left ( { x } \right )=\left \{ \begin{array}{l} x ^ { 2 } -1,x\le 1, \\ \frac { 1 } { x-1 },x&gt;1, \end{array} \right.$则$f\left ( { f\left ( { 3 } \right ) } \right )=$（ ）"
     )
     by_preset = {item["preset"]: item for item in scene["curves"]}
     assert by_preset["quadratic"]["quadratic"] == {"a": 1.0, "b": 0.0, "c": -1.0}
@@ -65,6 +72,17 @@ def test_draft_splits_a_piecewise_function_at_its_break() -> None:
     assert by_preset["reciprocal"]["reciprocal"] == {"h": 1.0, "k": 1.0}
     assert by_preset["reciprocal"]["domain"]["from"] > 1
     assert set(scene["steps"][0]["curves"]) == {"q", "f"}
+    caption = scene["steps"][0]["caption"]
+    assert r"x²-1" in caption
+    assert "1/(x-1)" in caption
+    assert r"\²" not in caption
+    assert "f(f(3))" in caption
+    view = scene["steps"][0]["view"]
+    assert -1.6 <= view["xMin"] <= -1.2
+    assert 3.2 <= view["xMax"] <= 4.0
+    assert -2.4 <= view["yMin"] <= -1.2
+    assert 2.4 <= view["yMax"] <= 4.0
+    assert view["yMax"] - view["yMin"] < 6
 
 
 def test_draft_reads_the_fraction_exponential_in_the_stem() -> None:

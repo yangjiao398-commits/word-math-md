@@ -24,6 +24,26 @@
     statusEl.textContent = text;
   }
 
+  function showStem(text) {
+    const el = document.getElementById("stem");
+    el.replaceChildren();
+    String(text || "").split(/(\$\$[\s\S]+?\$\$|\$[^$]+\$)/).forEach(function (part) {
+      if (!part) return;
+      const display = part.startsWith("$$") && part.endsWith("$$");
+      const inline = !display && part.startsWith("$") && part.endsWith("$") && part.length > 2;
+      if ((display || inline) && window.katex) {
+        const span = document.createElement("span");
+        window.katex.render(display ? part.slice(2, -2) : part.slice(1, -1), span, {
+          throwOnError: false,
+          displayMode: display,
+        });
+        el.appendChild(span);
+        return;
+      }
+      el.appendChild(document.createTextNode(part));
+    });
+  }
+
   function curveSpec() {
     const preset = presetEl.value;
     const spec = { id: "f", preset: preset, color: "#2457d6", label: "", labelCorner: "left" };
@@ -161,7 +181,7 @@
 
   async function save() {
     if (!questionId) {
-      setStatus("缺少题目 id，请从试卷里的「制作解题动画」进入。");
+      setStatus("缺少题目 id，请从试卷里的「简易解题动画」进入。");
       return;
     }
     const next = buildScene();
@@ -172,7 +192,7 @@
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "保存失败");
-    setStatus("已保存。回到试卷刷新后，该题会显示「解题过程」。");
+    setStatus("已保存。回到试卷刷新后，该题会显示「cursor解题动画」。");
   }
 
   presetEl.addEventListener("change", function () {
@@ -190,7 +210,7 @@
   async function boot() {
     paintParams(null);
     if (!questionId) {
-      setStatus("从试卷题目上的「制作解题动画」进入后，会带上题目和详解。");
+      setStatus("从试卷题目上的「简易解题动画」进入后，会带上题目和详解。");
       scene = {
         title: "解题过程",
         view: { xMin: -4, xMax: 4, yMin: -4, yMax: 4 },
@@ -203,11 +223,19 @@
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "读取题目失败");
     document.getElementById("heading").textContent =
-      "第 " + (data.question_no || "") + " 题 · 制作解题动画";
-    document.getElementById("stem").textContent = data.stem_text || "";
+      "第 " + (data.question_no || "") + " 题 · 简易解题动画";
+    showStem(data.stem_text || "");
     sourceEl.value = data.source_text || data.solution_text || "";
     titleEl.value = data.lesson && data.lesson.title ? data.lesson.title : ("第 " + (data.question_no || "") + " 题");
-    const stale = data.scene && data.scene.meta === "按详解生成的草稿";
+    function droppedMath(saved) {
+      return (saved.steps || []).some(function (step) {
+        var caption = step.caption || "";
+        var formulas = (step.formula || []).join("");
+        return caption.indexOf("，，") >= 0
+          || (/[0-9]/.test(formulas) && !/[0-9]/.test(caption) && (step.formula || []).length >= 2);
+      });
+    }
+    const stale = data.scene && (data.scene.meta === "按详解生成的草稿" || droppedMath(data.scene));
     if (data.scene && !stale) {
       scene = data.scene;
       keepCurves = generatedKeepsCurves(scene);

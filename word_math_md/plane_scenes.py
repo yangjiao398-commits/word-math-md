@@ -485,18 +485,27 @@ def _side_domain(compact: str, end: int) -> dict[str, float] | None:
 
 
 def _poly_label(a_value: float, b_value: float, c_value: float) -> str:
-    def term(coef: float, body: str, first: bool) -> str:
-        if abs(coef) < 1e-9:
-            return ""
-        sign = "-" if coef < 0 else ("" if first else "+")
-        magnitude = abs(coef)
-        if body and abs(magnitude - 1) < 1e-9:
-            return sign + body
-        text = f"{magnitude:g}"
-        return sign + text + body
+    parts: list[tuple[str, str]] = []
 
-    label = term(a_value, "x²", True) + term(b_value, "x", False) + term(c_value, "", False)
-    return "y = " + (label or "0")
+    def piece(coef: float, body: str) -> None:
+        if abs(coef) < 1e-9:
+            return
+        magnitude = abs(coef)
+        number = "" if body and abs(magnitude - 1) < 1e-9 else f"{magnitude:g}"
+        parts.append(("−" if coef < 0 else "+", number + body))
+
+    piece(a_value, "x²")
+    piece(b_value, "x")
+    piece(c_value, "")
+    if not parts:
+        return "y = 0"
+    text = ""
+    for index, (sign, body) in enumerate(parts):
+        if index == 0:
+            text += ("" if sign == "+" else "−") + body
+        else:
+            text += f" {sign} {body}"
+    return "y = " + text
 
 
 def _curve_fn(spec: dict[str, Any]):
@@ -522,28 +531,88 @@ def _curve_fn(spec: dict[str, Any]):
     return lambda x: x * x
 
 
-def _view_for(spec: dict[str, Any], x_min: float, x_max: float) -> dict[str, float]:
+def _vertical_holes(spec: dict[str, Any]) -> list[float]:
+    preset = spec.get("preset")
+    if preset == "reciprocal":
+        return [float(spec["reciprocal"]["h"])]
+    if preset == "linear-reciprocal":
+        return [0.0]
+    return []
+
+
+def _sample_ys(spec: dict[str, Any], x_min: float, x_max: float) -> list[float]:
+    """Sample a curve inside its domain, staying off vertical asymptotes."""
     function = _curve_fn(spec)
-    sample_ys: list[float] = []
-    for index in range(1, 48):
-        x_value = x_min + (x_max - x_min) * index / 48
+    domain = spec.get("domain") or {}
+    holes = _vertical_holes(spec)
+    found: list[float] = []
+    steps = 72
+    for index in range(1, steps):
+        x_value = x_min + (x_max - x_min) * index / steps
+        if "from" in domain and x_value < float(domain["from"]):
+            continue
+        if "to" in domain and x_value > float(domain["to"]):
+            continue
+        if any(abs(x_value - hole) < 0.42 for hole in holes):
+            continue
         try:
             y_value = float(function(x_value))
         except (OverflowError, ZeroDivisionError, ValueError):
             continue
-        if math.isfinite(y_value) and abs(y_value) <= 24:
-            sample_ys.append(y_value)
+        if math.isfinite(y_value) and abs(y_value) <= 20:
+            found.append(y_value)
+    return found
+
+
+def _frame_view(curves: list[dict[str, Any]], x_min: float, x_max: float) -> dict[str, float]:
+    sample_ys: list[float] = []
+    for spec in curves:
+        sample_ys.extend(_sample_ys(spec, x_min, x_max))
     if not sample_ys:
         return {"xMin": round(x_min, 2), "xMax": round(x_max, 2), "yMin": -4, "yMax": 4}
     low = min(sample_ys)
     high = max(sample_ys)
-    pad = max(0.8, (high - low) * 0.3)
+    if high - low < 1.2:
+        mid = (low + high) / 2
+        low, high = mid - 0.8, mid + 0.8
+    pad = max(0.7, (high - low) * 0.22)
+    y_min = low - pad
+    y_max = high + pad
+    if y_min > 0:
+        y_min = -0.6
+    if y_max < 0:
+        y_max = 0.6
     return {
         "xMin": round(x_min, 2),
         "xMax": round(x_max, 2),
-        "yMin": round(low - pad, 2),
-        "yMax": round(high + pad, 2),
+        "yMin": round(y_min, 2),
+        "yMax": round(y_max, 2),
     }
+
+
+def _view_for(spec: dict[str, Any], x_min: float, x_max: float) -> dict[str, float]:
+    return _frame_view([spec], x_min, x_max)
+
+
+def _piecewise_break(curves: list[dict[str, Any]]) -> float | None:
+    """Return the shared boundary when one piece ends where the next begins."""
+    left = [
+        float(item["domain"]["to"])
+        for item in curves
+        if isinstance(item.get("domain"), dict) and "to" in item["domain"] and "from" not in item["domain"]
+    ]
+    right = [
+        float(item["domain"]["from"])
+        for item in curves
+        if isinstance(item.get("domain"), dict) and "from" in item["domain"] and "to" not in item["domain"]
+    ]
+    best: tuple[float, float] | None = None
+    for end in left:
+        for start in right:
+            gap = start - end
+            if -0.05 <= gap <= 0.45 and (best is None or gap < best[1] - best[0]):
+                best = (end, start)
+    return best[0] if best else None
 
 
 def _with_gap(spec: dict[str, Any], hole: float, gap: float) -> list[dict[str, Any]]:
@@ -802,9 +871,14 @@ def _strip_curve(spec: dict[str, Any]) -> dict[str, Any]:
 def _plain_formula(latex: str) -> str:
     """Turn one formula into a short readable fragment so the sentence stays intact."""
     text = _compact(latex)
+    text = text.replace(r"\left.", "").replace(r"\right.", "")
     text = text.replace(r"\left", "").replace(r"\right", "")
     text = text.replace(r"\dfrac", r"\frac").replace(r"\tfrac", r"\frac").replace(r"\cfrac", r"\frac")
     for src, dst in (
+        (r"\leqslant", "≤"),
+        (r"\leq", "≤"),
+        (r"\geqslant", "≥"),
+        (r"\geq", "≥"),
         (r"\infty", "∞"),
         (r"\times", "×"),
         (r"\cdot", "·"),
@@ -820,13 +894,40 @@ def _plain_formula(latex: str) -> str:
         match = re.search(r"\\frac\{([^{}]*)\}\{([^{}]*)\}", text)
         if not match:
             break
-        text = text[: match.start()] + f"({match.group(1)})/({match.group(2)})" + text[match.end() :]
+        def piece(body: str) -> str:
+            return f"({body})" if re.search(r"[+\-；]", body) else body
+
+        text = text[: match.start()] + f"{piece(match.group(1))}/{piece(match.group(2))}" + text[match.end() :]
+    for src, dst in (
+        (r"\varphi", "φ"),
+        (r"\alpha", "α"),
+        (r"\beta", "β"),
+        (r"\gamma", "γ"),
+        (r"\delta", "δ"),
+        (r"\theta", "θ"),
+        (r"\lambda", "λ"),
+        (r"\omega", "ω"),
+        (r"\Delta", "Δ"),
+        (r"\sin", "sin"),
+        (r"\cos", "cos"),
+        (r"\tan", "tan"),
+        (r"\cot", "cot"),
+        (r"\log", "log"),
+        (r"\ln", "ln"),
+        (r"\lg", "lg"),
+    ):
+        text = text.replace(src, dst)
     text = text.replace(r"^{2}", "²").replace(r"^{3}", "³")
     text = re.sub(r"\^\{([^{}]+)\}", r"^\1", text)
     text = text.replace(r"\sqrt", "√")
-    text = text.replace("{", "").replace("}", "")
+    text = text.replace("\\\\", "；")
+    text = re.sub(r"\\begin\{[a-zA-Z*]+\}(?:\{[^{}]*\})?", "", text)
+    text = re.sub(r"\\end\{[a-zA-Z*]+\}", "", text)
     text = re.sub(r"\\[a-zA-Z]+", "", text)
-    return text
+    text = text.replace("{", "").replace("}", "").replace("\\", "")
+    text = re.sub(r",*；", "；", text)
+    text = re.sub(r"；+", "；", text)
+    return text.strip("； ")
 
 
 def _quad_y(spec: dict[str, Any], x_value: float) -> float:
@@ -842,8 +943,24 @@ def _const_over_a(constant: float) -> str:
     return "0"
 
 
-def _root_markers(roots: list[float]) -> list[dict[str, Any]]:
-    return [{"x": value, "name": f"x={value:g}", "tone": "neutral"} for value in roots]
+def _num_prose(value: float) -> str:
+    text = f"{abs(value):g}"
+    return f"−{text}" if value < 0 else text
+
+
+def _const_prose(constant: float) -> str:
+    if constant < 0:
+        return f"−{abs(constant):g}/a"
+    if constant > 0:
+        return f"{constant:g}/a"
+    return "0"
+
+
+def _axis_markers(roots: list[float], name: str | None = None) -> list[dict[str, Any]]:
+    return [
+        {"x": value, "name": name or f"{value:g}", "tone": "neutral"}
+        for value in roots
+    ]
 
 
 def _root_guides(roots: list[float]) -> list[dict[str, Any]]:
@@ -855,8 +972,82 @@ def _choice_letter(text: str) -> str:
     return found.group(1).upper() if found else ""
 
 
+_QUAD_EXPR = re.compile(
+    r"(?<![A-Za-z0-9])([+-]?(?:\d+(?:\.\d+)?|[A-Za-z])?)x\^\{2\}"
+    r"([+-](?:\d+(?:\.\d+)?|[A-Za-z])?x)?"
+    r"([+-]\d+(?:\.\d+)?)?"
+)
+
+
+def _source_quadratic(compact: str) -> str | None:
+    found = _QUAD_EXPR.search(compact)
+    if not found:
+        return None
+    return found.group(0)
+
+
+def _quadratic_prose(expr: str) -> str:
+    body = expr.replace("^{2}", "²")
+    if body.startswith("-"):
+        body = "−" + body[1:]
+    body = body.replace("+", " + ").replace("-", " − ")
+    return re.sub(r"\s+", " ", body).strip()
+
+
+def _relation_after(compact: str, expr: str) -> str:
+    at = compact.find(expr)
+    tail = compact[at + len(expr) : at + len(expr) + 8] if at >= 0 else ""
+    if tail.startswith(r"\le") or tail.startswith("≤"):
+        return r"\le"
+    if tail.startswith(r"\ge") or tail.startswith("≥"):
+        return r"\ge"
+    if tail.startswith(">"):
+        return ">"
+    return "<"
+
+
+def _relation_prose(relation: str) -> str:
+    return {"\\le": "≤", "\\ge": "≥"}.get(relation, relation)
+
+
+def _relation_word(relation: str) -> str:
+    return {">": "大于", r"\ge": "大于等于", r"\le": "小于等于"}.get(relation, "小于")
+
+
+def _factor_piece(root: float, *, latex: bool) -> str:
+    if abs(root) < 1e-9:
+        return "x"
+    if latex:
+        return f"(x-{root:g})" if root > 0 else f"(x+{abs(root):g})"
+    if root > 0:
+        return f"(x − {root:g})"
+    return f"(x + {abs(root):g})"
+
+
+def _poly_latex(a_value: float, b_value: float, c_value: float) -> str:
+    parts: list[str] = []
+
+    def piece(coef: float, body: str) -> None:
+        if abs(coef) < 1e-9:
+            return
+        magnitude = abs(coef)
+        number = "" if body and abs(magnitude - 1) < 1e-9 else f"{magnitude:g}"
+        sign = "-" if coef < 0 else "+"
+        parts.append(sign + number + body)
+
+    piece(a_value, "x^{2}")
+    piece(b_value, "x")
+    piece(c_value, "")
+    if not parts:
+        return "y=0"
+    text = "".join(parts)
+    if text.startswith("+"):
+        text = text[1:]
+    return "y=" + text
+
+
 def _quadratic_inequality_steps(raw: str, curves: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
-    """Stage a quadratic-inequality solution the way a written 详解 does."""
+    """Stage a quadratic-inequality solution in the same order as a written 详解."""
     quads = [item for item in curves if item.get("preset") == "quadratic" and not item.get("domain")]
     if len(quads) != 1:
         return None
@@ -878,22 +1069,36 @@ def _quadratic_inequality_steps(raw: str, curves: list[dict[str, Any]]) -> list[
     outside = a_value < 0
     vertex_x = -b_value / (2 * a_value)
     vertex_y = _quad_y(spec, vertex_x)
-    high = max(vertex_y, 0.8)
+    x_min = round(r1 - 1.8, 2)
+    x_max = round(r2 + 1.8, 2)
+    edge = min(_quad_y(spec, x_min), _quad_y(spec, x_max), 0.0)
     wide = {
-        "xMin": round(r1 - 1.8, 2),
-        "xMax": round(r2 + 1.8, 2),
-        "yMin": round(min(0, vertex_y) - 3.2, 2),
-        "yMax": round(high + 1.4, 2),
+        "xMin": x_min,
+        "xMax": x_max,
+        "yMin": round(min(-1.6, max(edge + 2.6, -4.2)), 2),
+        "yMax": round(max(vertex_y, 0.8) + 1.4, 2),
     }
     between = {
         "xMin": round(r1 - 0.8, 2),
         "xMax": round(r2 + 0.8, 2),
         "yMin": round(min(-1.2, vertex_y - 1), 2),
-        "yMax": round(high + 1.2, 2),
+        "yMax": round(max(vertex_y, 0.8) + 1.2, 2),
     }
+    expr = _source_quadratic(compact) or "ax^{2}+bx+c"
+    prose = _quadratic_prose(expr)
+    relation = _relation_after(compact, expr)
+    rel_prose = _relation_prose(relation)
+    solution_prose = (
+        f"(−∞, {r1:g}) ∪ ({r2:g}, +∞)" if outside else f"({r1:g}, {r2:g})"
+    )
+    solution_latex = (
+        f"\\left(-\\infty,{r1:g}\\right)\\cup\\left({r2:g},+\\infty\\right)"
+        if outside
+        else f"\\left({r1:g},{r2:g}\\right)"
+    )
     solution = (
         [
-            {"from": wide["xMin"], "to": r1, "tone": "down", "label": f"(-∞, {r1:g})"},
+            {"from": wide["xMin"], "to": r1, "tone": "down", "label": f"(−∞, {r1:g})"},
             {"from": r2, "to": wide["xMax"], "tone": "down", "label": f"({r2:g}, +∞)"},
         ]
         if outside
@@ -901,9 +1106,11 @@ def _quadratic_inequality_steps(raw: str, curves: list[dict[str, Any]]) -> list[
     )
     opening_label = "开口向下，a < 0" if outside else "开口向上，a > 0"
     opening_caption = (
-        f"详解的第一个结论：解集在两根外侧，而不是两根之间。二次函数开口向下时，函数值在两根外侧为负，所以 a < 0。({r1:g}, {r2:g}) 这一段在 x 轴上方，不在解集里。"
+        "详解的第一个结论：解集在两根外侧，而不是两根之间。二次函数开口向下时，函数值在两根外侧为负，所以 a < 0。"
+        f"图中 ({r1:g}, {r2:g}) 在 x 轴上方，这一段不在解集里。"
         if outside
-        else f"详解的第一个结论：解集在两根之间。二次函数开口向上时，函数值在两根之间为负，所以 a > 0。"
+        else "详解的第一个结论：解集在两根之间。二次函数开口向上时，函数值在两根之间为负，所以 a > 0。"
+        f"图中 ({r1:g}, {r2:g}) 在 x 轴下方，这一段就是解集。"
     )
     interior = {
         "from": r1,
@@ -913,19 +1120,42 @@ def _quadratic_inequality_steps(raw: str, curves: list[dict[str, Any]]) -> list[
     }
     product = r1 * r2
     total = r1 + r2
-    label = spec.get("label") or _poly_label(a_value, b_value, c_value)
+    label = _poly_label(a_value, b_value, c_value)
+    spec["label"] = label
     choice = _choice_letter(raw)
     answer_tail = f"，故选 {choice}" if choice else ""
+    lead = "−" if abs(a_value + 1) < 1e-9 else ("" if abs(a_value - 1) < 1e-9 else _num_prose(a_value))
+    latex_lead = "-" if abs(a_value + 1) < 1e-9 else ("" if abs(a_value - 1) < 1e-9 else f"{a_value:g}")
+    factor = lead + _factor_piece(r1, latex=False) + _factor_piece(r2, latex=False)
+    product_piece = _factor_piece(r1, latex=False) + _factor_piece(r2, latex=False)
+    latex_factor = latex_lead + _factor_piece(r1, latex=True) + _factor_piece(r2, latex=True)
+    latex_product = _factor_piece(r1, latex=True) + _factor_piece(r2, latex=True)
+    below = relation in {"<", r"\le"}
+    product_rel = ">" if (a_value < 0) == below else "<"
+    region = f"x < {r1:g} 或 x > {r2:g}" if outside else f"{r1:g} < x < {r2:g}"
+    sign_note = ""
+    if outside and a_value < 0:
+        sign_note = "这和前面得到的 a < 0 一致。"
+    elif not outside and a_value > 0:
+        sign_note = "这和前面得到的 a > 0 一致。"
+    if abs(a_value + 1) < 1e-9:
+        substitute = f"把 a = −1 代入，{total:g} = −b/(−1) = b，所以 b = {_num_prose(b_value)}。"
+    else:
+        substitute = f"把 a = {_num_prose(a_value)} 代入，得到 b = {_num_prose(b_value)}。"
     shared = {"curve": curve_id, "curves": [curve_id]}
+    shade = "两段" if outside else "一段"
     return [
         {
             "id": "given",
             "title": "看清解集",
-            "caption": f"题干给出不等式的解集。图中涂色的部分就是这个解集，分界点是 x = {r1:g} 和 x = {r2:g}。",
-            "formula": ["ax^{2}+bx+c<0", f"\\left(-\\infty,{r1:g}\\right)\\cup\\left({r2:g},+\\infty\\right)" if outside else f"\\left({r1:g},{r2:g}\\right)"],
+            "caption": (
+                f"题干：不等式 {prose} {rel_prose} 0 的解集是 {solution_prose}。"
+                f"图中涂色的{shade}就是这个解集，分界点是 x = {r1:g} 和 x = {r2:g}。"
+            ),
+            "formula": [expr + relation + "0", solution_latex],
             "view": wide,
             "intervals": solution,
-            "markers": _root_markers([r1, r2]),
+            "markers": _axis_markers([r1, r2]),
             "guides": _root_guides([r1, r2]),
             **shared,
         },
@@ -936,73 +1166,99 @@ def _quadratic_inequality_steps(raw: str, curves: list[dict[str, Any]]) -> list[
             "formula": ["a<0" if outside else "a>0", "\\text{解集在两根外侧}" if outside else "\\text{解集在两根之间}"],
             "view": between,
             "intervals": [interior],
-            "markers": _root_markers([r1, r2]),
+            "markers": _axis_markers([r1, r2]),
             "guides": [],
             **shared,
         },
         {
             "id": "roots",
             "title": f"两根是 {r1:g} 和 {r2:g}",
-            "caption": f"详解接着写：x = {r1:g} 和 x = {r2:g} 是方程的两个根。图像与 x 轴的交点就是这两个根，交点处函数值为 0。",
-            "formula": ["ax^{2}+bx+c=0", f"x={r1:g}", f"x={r2:g}"],
+            "caption": (
+                f"详解接着写：x = {r1:g} 和 x = {r2:g} 是方程 {prose} = 0 的根。"
+                "图像与 x 轴的交点就是这两个根，交点处函数值为 0。"
+            ),
+            "formula": [expr + "=0", f"x={r1:g}", f"x={r2:g}"],
             "view": wide,
             "intervals": [],
-            "markers": _root_markers([r1, r2]),
+            "markers": _axis_markers([r1, r2], "根"),
             "guides": _root_guides([r1, r2]),
             **shared,
         },
         {
             "id": "vieta",
             "title": "根与系数",
-            "caption": f"由根与系数的关系，两根之和等于 −b/a，两根之积等于常数项除以 a。所以 {r1:g} + {r2:g} = −b/a，{r1:g} × {r2:g} = {c_value:g}/a。",
+            "caption": (
+                "由根与系数的关系，两根之和等于 −b/a，两根之积等于常数项除以 a。"
+                f"常数项是 {_num_prose(c_value)}，所以 {r1:g} + {r2:g} = −b/a，{r1:g} × {r2:g} = {_const_prose(c_value)}。"
+            ),
             "formula": [f"{r1:g}+{r2:g}=-\\dfrac{{b}}{{a}}", f"{r1:g}\\times {r2:g}={_const_over_a(c_value)}"],
             "view": wide,
             "intervals": [],
-            "markers": _root_markers([r1, r2]),
+            "markers": _axis_markers([r1, r2]),
             "guides": [],
             **shared,
         },
         {
             "id": "coefficient-a",
-            "title": f"求出 a = {a_value:g}",
-            "caption": f"先用积：{r1:g} × {r2:g} = {c_value:g}/a，即 {product:g} = {c_value:g}/a，所以 a = {a_value:g}。",
+            "title": f"求出 a = {_num_prose(a_value)}",
+            "caption": (
+                f"先用积：{r1:g} × {r2:g} = {_const_prose(c_value)}，即 {product:g} = {_const_prose(c_value)}，"
+                f"所以 a = {_num_prose(a_value)}。{sign_note}"
+            ),
             "formula": [f"{product:g}={_const_over_a(c_value)}", f"a={a_value:g}"],
             "view": wide,
             "intervals": [],
-            "markers": _root_markers([r1, r2]),
+            "markers": _axis_markers([r1, r2]),
             "guides": [],
             **shared,
         },
         {
             "id": "coefficient-b",
-            "title": f"求出 b = {b_value:g}",
-            "caption": f"再用和：{r1:g} + {r2:g} = −b/a。把 a = {a_value:g} 代入，得到 b = {b_value:g}。解析式是 {label}，顶点在 ({vertex_x:g}, {vertex_y:g})。",
-            "formula": [f"{total:g}=-\\dfrac{{b}}{{a}}", f"b={b_value:g}", "y=-x^{2}+4x-3" if a_value == -1 and b_value == 4 and c_value == -3 else f"y={a_value:g}x^{{2}}+{b_value:g}x+{c_value:g}"],
+            "title": f"求出 b = {_num_prose(b_value)}",
+            "caption": (
+                f"再用和：{r1:g} + {r2:g} = −b/a。{substitute}"
+                f"解析式是 {label}，顶点在 ({vertex_x:g}, {vertex_y:g})。"
+            ),
+            "formula": [f"{total:g}=-\\dfrac{{b}}{{a}}", f"b={b_value:g}", _poly_latex(a_value, b_value, c_value)],
             "view": wide,
             "intervals": [],
             "markers": [{"x": vertex_x, "name": "顶点", "tone": "up"}],
-            "guides": [{"x": vertex_x, "label": f"x = {vertex_x:g}"}, {"y": vertex_y, "label": f"y = {vertex_y:g}"}],
+            "guides": [
+                {"x": vertex_x, "label": f"x = {vertex_x:g}"},
+                {"y": vertex_y, "label": f"y = {vertex_y:g}"},
+            ],
             **shared,
         },
         {
             "id": "difference",
             "title": "计算 b − a",
-            "caption": f"系数都求出来了：a = {a_value:g}，b = {b_value:g}。所以 b − a = {b_value:g} − ({a_value:g}) = {b_value - a_value:g}。",
+            "caption": (
+                f"系数都求出来了：a = {_num_prose(a_value)}，b = {_num_prose(b_value)}。"
+                f"所以 b − a = {_num_prose(b_value)} − ({_num_prose(a_value)}) = {_num_prose(b_value - a_value)}。"
+            ),
             "formula": [f"b-a={b_value:g}-({a_value:g})={b_value - a_value:g}"],
             "view": wide,
             "intervals": [],
-            "markers": _root_markers([r1, r2]),
+            "markers": _axis_markers([r1, r2]),
             "guides": [],
             **shared,
         },
         {
             "id": "answer",
             "title": "核对并作答",
-            "caption": f"代回后，图像在解集上位于 x 轴下方，在两根之间位于 x 轴上方，与题干一致。因此 b − a = {b_value - a_value:g}{answer_tail}。",
-            "formula": [f"b-a={b_value - a_value:g}" + (f",\\ \\text{{故选 {choice}}}" if choice else "")],
+            "caption": (
+                f"代回检验：{label.removeprefix('y = ')} = {factor}。"
+                f"它{_relation_word(relation)} 0 时 {product_piece} {product_rel} 0，即 {region}，与题干的解集一致。"
+                f"因此 b − a = {_num_prose(b_value - a_value)}{answer_tail}。"
+            ),
+            "formula": [
+                latex_factor + relation + "0",
+                latex_product + product_rel + "0",
+                f"b-a={b_value - a_value:g}" + (f",\\ \\text{{故选 {choice}}}" if choice else ""),
+            ],
             "view": wide,
             "intervals": solution,
-            "markers": _root_markers([r1, r2]),
+            "markers": _axis_markers([r1, r2]),
             "guides": [],
             **shared,
         },
@@ -1213,7 +1469,15 @@ def draft_scene(
             x_min, x_max = min(xs) - pad, max(xs) + pad
         if (decreasing or increasing) and not finite_intervals and not domain_hole:
             x_min, x_max = min(x_min, -2.4), max(x_max, 2.4)
-        view = _view_for(focus, x_min, x_max)
+        shown = chosen or [focus]
+        break_at = _piecewise_break(shown)
+        if break_at is not None:
+            x_min, x_max = break_at - 2.4, break_at + 2.6
+            for value in xs:
+                if abs(value - break_at) <= 5:
+                    x_min = min(x_min, value - 0.6)
+                    x_max = max(x_max, value + 0.6)
+        view = _frame_view(shown, x_min, x_max)
         interval_specs: list[dict[str, Any]] = []
         if not domain_hole:
             source_intervals = finite_intervals or intervals
