@@ -71,6 +71,8 @@ from word_math_md.plane_scenes import (
     plain_solution,
     save_scene,
 )
+from word_math_md.question_rewrite import rewrite_question
+from word_math_md.question_variant import variant_question
 from word_math_md.knowledge_courseware import (
     delete_courseware,
     list_courseware,
@@ -471,6 +473,17 @@ def index() -> str:
       background: #12181f; border: 1px solid var(--line); border-radius: 12px;
       padding: 16px; margin-bottom: 14px;
     }}
+    .rewrite-panel {{
+      margin-top: 12px; padding: 12px 14px;
+      border: 1px solid #3d6f4a; border-radius: 10px;
+      background: #15241c; line-height: 1.75;
+    }}
+    .rewrite-panel h4 {{ margin: 12px 0 4px; color: #8fd0a8; font-size: 0.92rem; }}
+    .rewrite-panel h4:first-child {{ margin-top: 0; }}
+    .rewrite-panel p, .rewrite-panel li {{ margin: 0.25em 0; }}
+    .rewrite-panel .katex-display,
+    .rewrite-panel .katex-display > .katex {{ margin: 6px 0; overflow-x: auto; text-align: left; }}
+    .rewrite-opt {{ margin: 0.35em 0; }}
     .paper-card {{ cursor: default; }}
     .paper-card:hover {{ border-color: var(--accent); }}
     .paper-head {{
@@ -911,6 +924,7 @@ def index() -> str:
     </div>
     <footer class="no-print">API: POST /api/convert · POST /api/exam-bank/import-markdown · POST /api/exam-bank/import-docx · GET /api/exam-bank/papers · POST /api/exam-bank/papers/&#123;id&#125;/grade-sheet · v{__version__}</footer>
   </main>
+  <script src="/vendor/katex/katex.min.js"></script>
   <script>
     const f = document.getElementById('f');
     const result = document.getElementById('result');
@@ -1339,6 +1353,10 @@ def index() -> str:
         }}
         if (paper) {{
           card += '<div class="q-block vs-row no-print">';
+          if (q.question_id) {{
+            card += '<button type="button" class="vs-open" data-variant="' +
+              esc(q.question_id) + '">题型变式</button>';
+          }}
           card += '<button type="button" class="vs-open" data-vs-index="' + qi +
             '">可视化解题</button>';
           if (q.question_id) {{
@@ -1631,7 +1649,186 @@ def index() -> str:
         btnListPapers.disabled = false;
       }}
     }}
+    function nextVariantMath(source, from) {{
+      let best = -1;
+      let kind = '';
+      function consider(index, name) {{
+        if (index >= 0 && (best < 0 || index < best)) {{
+          best = index;
+          kind = name;
+        }}
+      }}
+      consider(source.indexOf('$$', from), 'display');
+      consider(source.indexOf('\\\\[', from), 'bracket');
+      consider(source.indexOf('\\\\(', from), 'paren');
+      consider(source.indexOf('\\\\begin{{', from), 'begin');
+      const dollar = source.indexOf('$', from);
+      if (dollar >= 0 && !source.startsWith('$$', dollar)) consider(dollar, 'dollar');
+      if (best < 0) return null;
+      if (kind === 'display') {{
+        const end = source.indexOf('$$', best + 2);
+        if (end < 0) return null;
+        return {{ start: best, end: end + 2, tex: source.slice(best + 2, end), display: true }};
+      }}
+      if (kind === 'bracket') {{
+        const end = source.indexOf('\\\\]', best + 2);
+        if (end < 0) return null;
+        return {{ start: best, end: end + 2, tex: source.slice(best + 2, end), display: true }};
+      }}
+      if (kind === 'paren') {{
+        const end = source.indexOf('\\\\)', best + 2);
+        if (end < 0) return null;
+        return {{ start: best, end: end + 2, tex: source.slice(best + 2, end), display: false }};
+      }}
+      if (kind === 'begin') {{
+        const open = source.indexOf('}}', best + 7);
+        if (open < 0) return null;
+        const name = source.slice(best + 7, open);
+        const close = '\\\\end{{' + name + '}}';
+        const end = source.indexOf(close, open);
+        if (end < 0) return null;
+        return {{ start: best, end: end + close.length, tex: source.slice(best, end + close.length), display: false }};
+      }}
+      let end = best + 1;
+      while (end < source.length) {{
+        if (source[end] === '\\\\') {{ end += 2; continue; }}
+        if (source[end] === '$') break;
+        if (source[end] === '\\n') return null;
+        end += 1;
+      }}
+      if (end >= source.length || source[end] !== '$') return null;
+      return {{ start: best, end: end + 1, tex: source.slice(best + 1, end), display: false }};
+    }}
+    function renderDollarMath(text) {{
+      const root = document.createElement('div');
+      const source = String(text || '');
+      let cursor = 0;
+      while (cursor < source.length) {{
+        const found = nextVariantMath(source, cursor);
+        if (!found || found.end <= cursor) {{
+          root.appendChild(document.createTextNode(source.slice(cursor)));
+          break;
+        }}
+        if (found.start > cursor) {{
+          root.appendChild(document.createTextNode(source.slice(cursor, found.start)));
+        }}
+        const node = document.createElement(found.display ? 'div' : 'span');
+        if (window.katex) {{
+          window.katex.render(found.tex.trim(), node, {{ throwOnError: false, displayMode: found.display }});
+        }} else {{
+          node.textContent = source.slice(found.start, found.end);
+        }}
+        root.appendChild(node);
+        cursor = found.end;
+      }}
+      return root;
+    }}
+    function appendRewriteMath(parent, title, text) {{
+      const heading = document.createElement('h4');
+      heading.textContent = title;
+      parent.appendChild(heading);
+      parent.appendChild(renderDollarMath(text));
+    }}
+    function showVariant(card, data) {{
+      let panel = card.querySelector('.variant-panel');
+      if (!panel) {{
+        panel = document.createElement('div');
+        panel.className = 'rewrite-panel variant-panel q-block no-print';
+        card.appendChild(panel);
+      }}
+      panel.hidden = false;
+      panel.replaceChildren();
+      if (!data.supported) {{
+        const heading = document.createElement('h4');
+        heading.textContent = '题型变式';
+        const message = document.createElement('p');
+        message.textContent = data.message || '这道题暂时不能生成变式。';
+        panel.appendChild(heading);
+        panel.appendChild(message);
+        return;
+      }}
+      const title = document.createElement('h4');
+      title.textContent = '变式模拟题';
+      panel.appendChild(title);
+      const point = document.createElement('p');
+      point.appendChild(document.createTextNode('考点：'));
+      const pointMath = renderDollarMath(data.point || '');
+      while (pointMath.firstChild) point.appendChild(pointMath.firstChild);
+      panel.appendChild(point);
+      const essence = document.createElement('p');
+      const essenceMath = renderDollarMath(data.essence || '');
+      while (essenceMath.firstChild) essence.appendChild(essenceMath.firstChild);
+      panel.appendChild(essence);
+      const axis = document.createElement('p');
+      axis.textContent = '变式方式：' + (data.axis || '数据');
+      panel.appendChild(axis);
+      if ((data.changes || []).length) {{
+        const list = document.createElement('ul');
+        data.changes.forEach(function(line) {{
+          const item = document.createElement('li');
+          const math = renderDollarMath(line);
+          while (math.firstChild) item.appendChild(math.firstChild);
+          list.appendChild(item);
+        }});
+        panel.appendChild(list);
+      }}
+      appendRewriteMath(panel, '题干', data.stem_md || '');
+      if ((data.options || []).length) {{
+        const optionsHeading = document.createElement('h4');
+        optionsHeading.textContent = '选项';
+        panel.appendChild(optionsHeading);
+        data.options.forEach(function(opt) {{
+          const row = document.createElement('div');
+          row.className = 'rewrite-opt';
+          row.appendChild(document.createTextNode((opt.label || '') + '. '));
+          const math = renderDollarMath(opt.content_md || '');
+          while (math.firstChild) row.appendChild(math.firstChild);
+          panel.appendChild(row);
+        }});
+      }}
+      const answerHeading = document.createElement('h4');
+      answerHeading.textContent = '【答案】';
+      panel.appendChild(answerHeading);
+      panel.appendChild(renderDollarMath(String(data.answer || '')));
+      appendRewriteMath(panel, '【分析】', data.analysis_md || '');
+      appendRewriteMath(panel, '【详解】', data.solution_md || '');
+    }}
+    async function variantQuestion(btn) {{
+      const card = btn.closest('article');
+      const questionId = btn.getAttribute('data-variant') || '';
+      if (!card || !questionId) return;
+      const panel = card.querySelector('.variant-panel');
+      if (panel && !panel.hidden && btn.dataset.loaded === '1') {{
+        panel.hidden = true;
+        btn.textContent = '题型变式';
+        return;
+      }}
+      btn.disabled = true;
+      btn.textContent = '正在生成变式…';
+      try {{
+        const res = await fetch('/api/exam-bank/questions/' + encodeURIComponent(questionId) + '/variant', {{
+          method: 'POST',
+        }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        showVariant(card, data);
+        btn.dataset.loaded = '1';
+        btn.textContent = '收起变式';
+      }} catch (err) {{
+        showVariant(card, {{ supported: false, message: '变式失败: ' + err.message }});
+        btn.textContent = '题型变式';
+      }} finally {{
+        btn.disabled = false;
+      }}
+    }}
     questions.addEventListener('click', (ev) => {{
+      const variantBtn = ev.target.closest('[data-variant]');
+      if (variantBtn && questions.contains(variantBtn)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        variantQuestion(variantBtn);
+        return;
+      }}
       const planeEdit = ev.target.closest('[data-plane-edit]');
       if (planeEdit && questions.contains(planeEdit)) {{
         ev.preventDefault();
@@ -2832,6 +3029,40 @@ def api_plane_scene_source(question_id: str) -> JSONResponse:
             "scene": scene,
         }
     )
+
+
+@app.post("/api/exam-bank/questions/{question_id}/variant")
+def api_variant_question(question_id: str) -> JSONResponse:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", question_id or ""):
+        raise HTTPException(400, "无效的题目 id")
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        rows = get_questions_by_ids([question_id])
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    if not rows:
+        raise HTTPException(404, "题目不存在")
+    try:
+        payload = variant_question(rows[0])
+    except Exception as exc:
+        payload = {"ok": True, "supported": False, "message": f"变式失败：{exc}"}
+    return JSONResponse(payload)
+
+
+@app.post("/api/exam-bank/questions/{question_id}/rewrite")
+def api_rewrite_question(question_id: str) -> JSONResponse:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", question_id or ""):
+        raise HTTPException(400, "无效的题目 id")
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        rows = get_questions_by_ids([question_id])
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    if not rows:
+        raise HTTPException(404, "题目不存在")
+    return JSONResponse(rewrite_question(rows[0]))
 
 
 @app.put("/api/plane-scenes/{question_id}")
