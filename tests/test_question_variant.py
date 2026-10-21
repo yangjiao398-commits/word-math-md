@@ -116,6 +116,81 @@ def test_model_variant_is_rejected_when_it_copies_the_base() -> None:
     assert "过于接近" in result["message"]
 
 
+def test_changed_numbers_are_not_treated_as_a_copy_of_the_skeleton() -> None:
+    base_stem = (
+        r"已知集合 $A=\{x\mid m-1\le x\le 2m\}$，函数 $f(x)=\sqrt{-x^{2}+2x+8}$ 的定义域为 $B$。"
+        "（1）求 $B$；（2）若集合 $A$ 是集合 $B$ 的子集，求实数 $m$ 的取值范围。"
+    )
+    stem = (
+        r"已知集合 $A=\{x\mid 2m-3\le x\le m+1\}$，函数 $g(x)=\sqrt{-x^2+4x+12}$ 的定义域为 $B$。"
+        "（1）求 $B$；（2）若 $A\\subseteq B$，求 $m$ 的取值集合。"
+    )
+
+    def complete(system: str, user: str) -> str:
+        return json.dumps(
+            {
+                "point": "定义域与集合的包含关系",
+                "essence": "先求根式定义域，再讨论参数区间是否含于该定义域。",
+                "axis": "数据",
+                "changes": ["更换二次式和区间端点"],
+                "stem_md": stem,
+                "options": [],
+                "answer": r"$\left[\frac12,+\infty\right)$",
+                "analysis_md": "分空集和非空集。",
+                "solution_md": r"合并后得 $m\ge \frac12$，即 $\left[\frac12,+\infty\right)$。答案：$\left[\frac12,+\infty\right)$",
+            },
+            ensure_ascii=False,
+        )
+
+    result = variant_question(
+        {
+            "id": "sz-q15-skeleton",
+            "type_code": "solution",
+            "stem_md": base_stem,
+            "answer_md": r"$(-\infty,2]$",
+            "analysis_md": "定义域与子集。",
+            "solution_md": "",
+        },
+        complete=complete,
+    )
+    assert result["supported"] is True
+    assert result["source"] == "model"
+    assert "4x+12" in result["stem_md"]
+
+
+def test_twelve_consecutive_hanzi_still_counts_as_a_copy() -> None:
+    phrase = "先写出定义域再讨论子集关系"
+
+    def complete(system: str, user: str) -> str:
+        return json.dumps(
+            {
+                "point": "集合关系",
+                "essence": "同一句话搬过来。",
+                "axis": "数据",
+                "changes": ["数字改了但句子没改"],
+                "stem_md": f"计算 $x+3$。{phrase}。",
+                "options": [],
+                "answer": "5",
+                "analysis_md": "相加。",
+                "solution_md": f"{phrase}。$2+3=5$。",
+            },
+            ensure_ascii=False,
+        )
+
+    result = variant_question(
+        {
+            "id": "hanzi-copy",
+            "stem_md": f"计算 $x+1$。{phrase}。",
+            "answer_md": "3",
+            "analysis_md": "相加。",
+            "solution_md": "2+1=3。",
+        },
+        complete=complete,
+    )
+    assert result["supported"] is False
+    assert result["rejected"] is True
+
+
 def test_model_variant_is_used_when_it_really_changes_the_base() -> None:
     def complete(system: str, user: str) -> str:
         return json.dumps(
@@ -149,8 +224,9 @@ def test_model_variant_is_used_when_it_really_changes_the_base() -> None:
     assert "递减" in result["solution_md"]
 
 
-def test_model_retries_when_the_solution_contradicts_the_choices() -> None:
+def test_model_repairs_a_solution_that_contradicts_the_choices() -> None:
     calls = {"n": 0}
+    stem = r"已知集合 $M=\{(x,y)\mid x+y=4\}$，则 $M\cap N=$（ ）"
 
     def complete(system: str, user: str) -> str:
         calls["n"] += 1
@@ -161,7 +237,7 @@ def test_model_retries_when_the_solution_contradicts_the_choices() -> None:
                     "essence": "同一考点",
                     "axis": "数据",
                     "changes": ["改了数字"],
-                    "stem_md": r"已知集合 $M=\{(x,y)\mid x+y=4\}$，则 $M\cap N=$（ ）",
+                    "stem_md": stem,
                     "options": [{"label": "A", "content_md": r"$(1,3)$"}, {"label": "B", "content_md": r"$(2,2)$"}],
                     "answer": "A",
                     "analysis_md": "联立。",
@@ -169,18 +245,16 @@ def test_model_retries_when_the_solution_contradicts_the_choices() -> None:
                 },
                 ensure_ascii=False,
             )
-        assert "上一次结果不能用" in user
+        assert "不要另出一题" in system
+        assert stem in user
+        assert "上一次结果不能用" not in user
         return json.dumps(
             {
-                "point": "集合关系",
-                "essence": "仍由两组交点反推直线参数。",
-                "axis": "数据",
-                "changes": ["常数改为 4"],
-                "stem_md": r"已知集合 $P=\{(x,y)\mid x+y=4\}$，求 $P$ 与直线 $x-y=0$ 的交集。",
-                "options": [{"label": "A", "content_md": r"$(2,2)$"}, {"label": "B", "content_md": r"$(1,3)$"}],
+                "stem_md": "另一道题",
+                "options": [{"label": "A", "content_md": r"$(1,3)$"}, {"label": "B", "content_md": r"$(2,2)$"}],
                 "answer": "A",
-                "analysis_md": "联立两个方程。",
-                "solution_md": r"由 $x+y=4$ 与 $x-y=0$ 得 $x=2,y=2$，所以交集为 $(2,2)$，故选 A。",
+                "analysis_md": "按题干联立。",
+                "solution_md": r"由题干得交集为 $(1,3)$。答案：A",
             },
             ensure_ascii=False,
         )
@@ -198,7 +272,72 @@ def test_model_retries_when_the_solution_contradicts_the_choices() -> None:
     assert calls["n"] == 2
     assert result["supported"] is True
     assert result["source"] == "model"
-    assert "(2,2)" in result["solution_md"]
+    assert result["stem_md"] == stem
+    assert "(1,3)" in result["solution_md"]
+    assert "不在选项" not in result["solution_md"]
+
+
+def test_model_asks_for_a_new_variant_when_repair_stays_inconsistent() -> None:
+    calls = {"n": 0}
+
+    def complete(system: str, user: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return json.dumps(
+                {
+                    "point": "集合关系",
+                    "essence": "同一考点",
+                    "axis": "数据",
+                    "changes": ["改了数字"],
+                    "stem_md": r"求集合 $P=\{x\mid x>3\}$ 的一个真子集。",
+                    "options": [{"label": "A", "content_md": r"$\{4\}$"}, {"label": "B", "content_md": r"$\{1\}$"}],
+                    "answer": "A",
+                    "analysis_md": "列举。",
+                    "solution_md": "结果与选项不符，需调整题设数据。",
+                },
+                ensure_ascii=False,
+            )
+        if calls["n"] == 2:
+            assert "不要另出一题" in system
+            return json.dumps(
+                {
+                    "stem_md": "被忽略的题干",
+                    "options": [{"label": "A", "content_md": r"$\{4\}$"}],
+                    "answer": "A",
+                    "analysis_md": "仍未对齐。",
+                    "solution_md": "算出的元素不在选项中。",
+                },
+                ensure_ascii=False,
+            )
+        assert "上一次结果不能用" in user
+        return json.dumps(
+            {
+                "point": "集合关系",
+                "essence": "仍判断一个集合是否为真子集。",
+                "axis": "数据",
+                "changes": ["把下界改为 5"],
+                "stem_md": r"求集合 $Q=\{x\mid x>5\}$ 的一个真子集。",
+                "options": [{"label": "A", "content_md": r"$\{6\}$"}, {"label": "B", "content_md": r"$\{5\}$"}],
+                "answer": "A",
+                "analysis_md": "真子集取一个比下界大的元素。",
+                "solution_md": r"$6>5$，所以 $\{6\}$ 是真子集。答案：A",
+            },
+            ensure_ascii=False,
+        )
+
+    result = variant_question(
+        {
+            "id": "set-second",
+            "stem_md": r"求集合 $M=\{x\mid x>1\}$ 的一个真子集。",
+            "answer_md": "A",
+            "analysis_md": "集合",
+            "solution_md": "列举。",
+        },
+        complete=complete,
+    )
+    assert calls["n"] == 3
+    assert result["supported"] is True
+    assert r"\{6\}" in result["solution_md"] or "{6}" in result["solution_md"]
 
 
 def test_q1_variant_keeps_the_negation_rule_and_drops_the_paper_header() -> None:
@@ -268,7 +407,118 @@ def test_other_local_shapes_change_numbers_and_recompute() -> None:
     assert r"2\sqrt{3}" not in sector["stem_md"] and r"2\sqrt{ 3 }" not in sector["stem_md"]
 
 
-def test_unrecognized_question_names_the_point_and_asks_for_a_model() -> None:
+def test_split_answer_parts_are_consistent_without_another_call() -> None:
+    calls = {"n": 0}
+    stem = r"设 $g(x)=\sqrt{-x^{2}+6x+7}$ 的定义域为 $D$。（1）写出 $D$；（2）求参数范围。"
+
+    def complete(system: str, user: str) -> str:
+        calls["n"] += 1
+        return json.dumps(
+            {
+                "point": "定义域与集合的包含关系",
+                "essence": "先求根式定义域，再求参数区间含于该定义域的范围。",
+                "axis": "数据",
+                "changes": ["更换了二次式和参数区间"],
+                "stem_md": stem,
+                "options": [],
+                "answer": r"（1）$D=\{x\mid -1\le x\le 7\}$；（2）$(-\infty,-2)\cup\left[1,\dfrac{7}{2}\right]$",
+                "analysis_md": "分空集和非空集讨论。",
+                "solution_md": (
+                    r"所以 $D=\{x\mid -1\le x\le 7\}$。"
+                    "\n\n"
+                    r"因此参数范围是 $(-\infty,-2)\cup\left[1,\dfrac{7}{2}\right]$。"
+                ),
+            },
+            ensure_ascii=False,
+        )
+
+    result = variant_question(
+        {
+            "id": "sz-q15-consistent",
+            "type_code": "solution",
+            "stem_md": r"已知函数 $f(x)=\sqrt{-x^{2}+2x+8}$ 的定义域为 $B$，求参数范围。",
+            "answer_md": r"（1）$B=[-2,4]$（2）$(-\infty,2]$",
+            "analysis_md": "先求定义域，再讨论子集。",
+            "solution_md": "",
+        },
+        complete=complete,
+    )
+    assert calls["n"] == 1
+    assert result["supported"] is True
+    assert result["source"] == "model"
+
+
+def test_q15_model_repairs_an_answer_missing_from_the_solution() -> None:
+    calls = {"n": 0}
+    stem = r"设 $g(x)=\sqrt{-x^{2}+6x+7}$ 的定义域为 $D$。（1）写出 $D$；（2）求参数范围。"
+
+    def complete(system: str, user: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return json.dumps(
+                {
+                    "point": "定义域与集合的包含关系",
+                    "essence": "先求根式定义域，再求参数区间含于该定义域的范围。",
+                    "axis": "数据",
+                    "changes": ["更换了二次式和参数区间"],
+                    "stem_md": stem,
+                    "options": [],
+                    "answer": r"（1）$D=\{x\mid -1\le x\le 7\}$；（2）$(-\infty,-2)\cup\left[1,\dfrac{7}{2}\right]$",
+                    "analysis_md": "发现和题干不一致，需重新核对。",
+                    "solution_md": r"算出定义域是 $[-2,4]$，参数范围是 $(-\infty,2]$。",
+                },
+                ensure_ascii=False,
+            )
+        assert "不要另出一题" in system
+        assert stem in user
+        return json.dumps(
+            {
+                "stem_md": "不要采用这道新题",
+                "options": [],
+                "answer": r"（1）$D=\{x\mid -1\le x\le 7\}$；（2）$(-\infty,-2)\cup\left[1,\dfrac{7}{2}\right]$",
+                "analysis_md": "按题干重算。",
+                "solution_md": (
+                    r"$D=\{x\mid -1\le x\le 7\}$。"
+                    "\n\n"
+                    r"参数范围是 $(-\infty,-2)\cup\left[1,\dfrac{7}{2}\right]$。"
+                    "\n\n"
+                    r"答案：（1）$D=\{x\mid -1\le x\le 7\}$；（2）$(-\infty,-2)\cup\left[1,\dfrac{7}{2}\right]$"
+                ),
+            },
+            ensure_ascii=False,
+        )
+
+    result = variant_question(
+        {
+            "id": "sz-q15",
+            "type_code": "solution",
+            "stem_md": (
+                r"已知集合$A=\left \{ \begin{array}{l} x\left | { m-1\le x\le 2m } \right . \end{array} \right \}$，"
+                r"函数$f\left ( { x } \right )=\sqrt{ -x ^ { 2 } +2x+8 }$的定义域为$B$．"
+                "（1）求$B$；（2）若集合$A$是集合$B$的子集，求实数$m$的取值范围．"
+            ),
+            "answer_md": r"（1）$B=[-2,4]$（2）$(-\infty,2]$",
+            "analysis_md": "先求定义域，再分空集与非空集讨论子集。",
+            "solution_md": "",
+        },
+        complete=complete,
+    )
+    assert calls["n"] == 2
+    assert result["supported"] is True
+    assert result["source"] == "model"
+    assert result["stem_md"] == stem
+    assert result["options"] == []
+    solution = _compact(result["solution_md"])
+    assert r"-1\lex\le7" in solution
+    assert r"\frac{7}{2}" in solution
+    assert "需重新" not in result["analysis_md"]
+    assert "深圳" not in result["stem_md"]
+
+
+def test_unrecognized_question_names_the_point_and_asks_for_a_model(monkeypatch) -> None:
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     result = variant_question(
         {
             "id": "conic",

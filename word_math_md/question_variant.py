@@ -30,13 +30,28 @@ VARIANT_SYSTEM = """你是高中数学变式题作者。用户给出的是一道
 3. 解答必须按新数据重新计算。禁止把底本的详解或选项换几个字后交上来。
 4. 不要出现学校、年份、试卷名称。不要复述底本题干里连续 12 个以上的相同汉字，也不要照搬底本的整段公式。
 5. 公式放在 $...$ 里。只输出一个 JSON 对象，不要代码围栏。
-6. 先把新数据算通，再写题面。详解只保留从新数据到最终结果的正确推导。选择题里，正确选项必须等于详解算出的最终结果。禁止写试错过程，禁止写数据矛盾、结果不在选项中，或要求再改题。
+6. 先把新数据算通，再写题面。详解只保留从新数据到最终结果的正确推导。详解最后一行必须是「答案：」加上 answer 字段的原文。选择题的 answer 只能是一个大写字母，该选项的 content_md 必须等于详解算出的结果，并且这串内容要出现在详解中。禁止写试错过程，禁止写数据矛盾、结果不在选项中，或要求再改题。
 
 JSON 字段：
 point, essence, axis, changes, stem_md, options, answer, analysis_md, solution_md。
 axis 使用“数据”“背景”“问法”，多项用顿号连接。
 changes 是字符串数组，逐条写改了什么。
 options 是 [{"label":"A","content_md":"..."}]，非选择题用 []。
+"""
+
+REPAIR_SYSTEM = """你是高中数学校对员。用户给出的变式题已经写好题干。不要另出一题，不要改题干里的数据、函数和设问。
+
+请只根据这个题干重新计算，并改写答案、选项和详解，使三者一致。
+
+必须遵守：
+1. stem_md 原样返回，一个符号都不要改。
+2. 详解只写这道题的正确推导。最后一行必须是「答案：」加上 answer 字段的原文。
+3. 选择题：answer 只能是一个大写字母。该选项的 content_md 必须与详解算出的结果相同，并且这串内容要出现在详解中。如果现有选项都不是正确结果，把其中一个选项改成正确结果，再把 answer 改成该选项字母。其余选项保留为干扰项。
+4. 非选择题：options 用 []。answer 写成详解最后算出的结果；answer 里的每一段公式都要原样出现在详解正文中。
+5. 禁止出现这些说法：不在选项、与选项不符、选项不符、需重新、需调整、题设数据、若坚持选项、互相矛盾。
+6. 公式放在 $...$ 里。只输出一个 JSON 对象，不要代码围栏。
+
+JSON 字段：stem_md, options, answer, analysis_md, solution_md。
 """
 
 _MARKS = ("命题", "不等式", "求值", "已知", "设函数", "计算")
@@ -68,6 +83,16 @@ def variant_question(row: dict[str, Any], *, complete: Completer | None = None) 
             return local
         if drafted.get("supported") and not _inconsistent(drafted):
             return drafted
+        if drafted.get("supported") and _inconsistent(drafted):
+            try:
+                repaired = _repair_draft(base, drafted, caller)
+            except Exception as exc:
+                local["message"] = f"变式模型调用失败：{exc}"
+                return local
+            if repaired.get("supported") and not _inconsistent(repaired):
+                return repaired
+            if repaired.get("rejected"):
+                drafted = repaired
         extra = (
             "上一次结果不能用：要么与底本过于接近，要么题干、选项和详解互相矛盾。"
             "请更换数据后重新计算。详解的最终结果必须与正确选项一致，"
@@ -568,6 +593,9 @@ def _choice_letter(answer: str) -> str:
 
 def _math_key(text: str) -> str:
     value = _compact(text).replace("$", "").replace("{", "").replace("}", "")
+    value = value.replace(r"\,", "").replace(r"\;", "").replace(r"\!", "").replace("~", "")
+    value = value.replace(r"\displaystyle", "").replace(r"\quad", "").replace(r"\qquad", "")
+    value = value.replace("−", "-").replace("–", "-")
     return value
 
 
@@ -580,13 +608,85 @@ def _inconsistent(drafted: dict[str, Any]) -> bool:
     solution = _math_key(str(drafted.get("solution_md") or ""))
     letter = _choice_letter(answer)
     if not letter:
-        key = _math_key(answer)
-        return bool(key) and key not in solution
+        fragments = _answer_fragments(answer)
+        return any(fragment not in solution for fragment in fragments)
     matched = next((opt for opt in drafted.get("options") or [] if str(opt.get("label") or "") == letter), None)
     if not matched:
         return True
     content = _math_key(str(matched.get("content_md") or ""))
     return bool(content) and content not in solution
+
+
+def _answer_fragments(answer: str) -> list[str]:
+    fragments = [_math_key(part) for part in re.findall(r"\$([^$]+)\$", answer or "")]
+    fragments = [part for part in fragments if part]
+    if fragments:
+        return fragments
+    key = _math_key(answer)
+    return [key] if key else []
+
+
+def _repair_draft(base: dict[str, Any], drafted: dict[str, Any], complete: Completer) -> dict[str, Any]:
+    """Ask the model to re-solve the draft it already wrote, without a new stem."""
+    raw = complete(REPAIR_SYSTEM, _repair_prompt(drafted))
+    payload = _parse_json(raw)
+    if payload is None:
+        return {"ok": True, "supported": False, "rejected": False, "message": "变式校对没有返回可解析的题目。"}
+    stem = str(drafted.get("stem_md") or "")
+    solution = str(payload.get("solution_md") or "").strip()
+    answer = str(payload.get("answer") or "").strip()
+    if not solution or not answer:
+        return {"ok": True, "supported": False, "rejected": False, "message": "变式校对缺少答案或详解。"}
+    if _copied(base, stem, solution):
+        return {
+            "ok": True,
+            "supported": False,
+            "rejected": True,
+            "point": drafted.get("point") or "",
+            "message": "生成结果与真题底本过于接近，已拒绝。变式需要改动数据、背景或问法，并重写解答。",
+        }
+    options = []
+    for opt in payload.get("options") or []:
+        if isinstance(opt, dict) and opt.get("label"):
+            options.append({"label": str(opt["label"]).strip(), "content_md": str(opt.get("content_md") or "")})
+    if not options:
+        options = list(drafted.get("options") or [])
+    return {
+        "ok": True,
+        "supported": True,
+        "source": "model",
+        "point": str(drafted.get("point") or base.get("point") or ""),
+        "essence": str(drafted.get("essence") or ""),
+        "axis": str(drafted.get("axis") or "数据"),
+        "changes": list(drafted.get("changes") or []),
+        "stem_md": stem,
+        "options": options,
+        "answer": answer,
+        "analysis_md": str(payload.get("analysis_md") or drafted.get("analysis_md") or ""),
+        "solution_md": solution,
+    }
+
+
+def _repair_prompt(drafted: dict[str, Any]) -> str:
+    option_text = "\n".join(
+        f"{opt.get('label')}. {opt.get('content_md')}"
+        for opt in drafted.get("options") or []
+        if opt.get("label")
+    )
+    return "\n".join(
+        [
+            "下面这道变式的题干、选项和详解不一致。请按题干重算，不要改题干。",
+            "【题干】",
+            str(drafted.get("stem_md") or ""),
+            "【当前选项】",
+            option_text or "（无，非选择题）",
+            "【当前答案】",
+            str(drafted.get("answer") or ""),
+            "【当前详解】",
+            str(drafted.get("solution_md") or "")[:8000],
+            "请输出校对后的 JSON。stem_md 必须与上面的题干完全相同。",
+        ]
+    )
 
 
 def _copied(base: dict[str, Any], stem: str, solution: str) -> bool:
@@ -609,16 +709,26 @@ def _copied(base: dict[str, Any], stem: str, solution: str) -> bool:
 
 def _surface(text: str) -> str:
     compact = _compact(text)
-    compact = re.sub(r"\$[^$]*\$", "", compact)
+    # Keep a break where a formula was, so Chinese on either side is not glued into one run.
+    compact = re.sub(r"\$[^$]*\$", "|", compact)
+    compact = re.sub(r"\\\[[\s\S]*?\\\]", "|", compact)
     compact = re.sub(r"\\[A-Za-z]+", "", compact)
-    return re.sub(r"[^0-9A-Za-z\u4e00-\u9fff]", "", compact)
+    return re.sub(r"[^0-9A-Za-z\u4e00-\u9fff|]", "", compact)
 
 
 def _shares_run(left: str, right: str, size: int) -> bool:
-    if len(left) < size or len(right) < size:
+    """True when any formula-free piece shares a run. The pipe is a formula break."""
+    right_parts = [part for part in right.split("|") if len(part) >= size]
+    if not right_parts:
         return False
-    seen = {left[index : index + size] for index in range(len(left) - size + 1)}
-    return any(right[index : index + size] in seen for index in range(len(right) - size + 1))
+    for part in left.split("|"):
+        if len(part) < size:
+            continue
+        seen = {part[index : index + size] for index in range(len(part) - size + 1)}
+        for piece in right_parts:
+            if any(piece[index : index + size] in seen for index in range(len(piece) - size + 1)):
+                return True
+    return False
 
 
 def _base_prompt(base: dict[str, Any]) -> str:
