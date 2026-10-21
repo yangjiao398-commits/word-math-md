@@ -29,7 +29,7 @@ VARIANT_SYSTEM = """你是高中数学变式题作者。用户给出的是一道
 2. 数据、背景、问法三项里至少改一项。数据指数字、系数、区间、参数；背景指情境和对象名称；问法指设问角度或所求目标。
 3. 解答必须按新数据重新计算。禁止把底本的详解或选项换几个字后交上来。
 4. 不要出现学校、年份、试卷名称。不要复述底本题干里连续 12 个以上的相同汉字，也不要照搬底本的整段公式。
-5. 公式放在 $...$ 里。只输出一个 JSON 对象，不要代码围栏。
+5. 公式放在 $...$ 里。只输出一个 JSON 对象，不要代码围栏，不要在 JSON 前后写说明。JSON 字符串里的每个反斜杠写成两个，例如 \\\\frac；换行写成 \\\\n。确保输出以 } 结束。
 6. 先把新数据算通，再写题面。详解只保留从新数据到最终结果的正确推导。详解最后一行必须是「答案：」加上 answer 字段的原文。选择题的 answer 只能是一个大写字母，该选项的 content_md 必须等于详解算出的结果，并且这串内容要出现在详解中。禁止写试错过程，禁止写数据矛盾、结果不在选项中，或要求再改题。
 
 JSON 字段：
@@ -49,7 +49,7 @@ REPAIR_SYSTEM = """你是高中数学校对员。用户给出的变式题已经�
 3. 选择题：answer 只能是一个大写字母。该选项的 content_md 必须与详解算出的结果相同，并且这串内容要出现在详解中。如果现有选项都不是正确结果，把其中一个选项改成正确结果，再把 answer 改成该选项字母。其余选项保留为干扰项。
 4. 非选择题：options 用 []。answer 写成详解最后算出的结果；answer 里的每一段公式都要原样出现在详解正文中。
 5. 禁止出现这些说法：不在选项、与选项不符、选项不符、需重新、需调整、题设数据、若坚持选项、互相矛盾。
-6. 公式放在 $...$ 里。只输出一个 JSON 对象，不要代码围栏。
+6. 公式放在 $...$ 里。只输出一个 JSON 对象，不要代码围栏，不要在 JSON 前后写说明。JSON 字符串里的每个反斜杠写成两个，例如 \\\\frac；换行写成 \\\\n。确保输出以 } 结束。
 
 JSON 字段：stem_md, options, answer, analysis_md, solution_md。
 """
@@ -58,12 +58,25 @@ _MARKS = ("命题", "不等式", "求值", "已知", "设函数", "计算")
 _SCHOOL_MARKS = ("深圳外国语", "注意事项", "答题卡", "学科网")
 
 
+_LAST_FINISH = ""
+# A single backslash before a LaTeX command is not a JSON escape. \frac survives json.loads
+# as a form feed, and \left / \mathbb do not parse at all.
+_LATEX_LEAK = re.compile(
+    r"(?<!\\)\\(?:frac|dfrac|tfrac|forall|begin|beta|binom|big|neq|nu|nabla|not|"
+    r"right|rangle|rho|mathbb|mathrm|mathbf|alpha|left|ldots|leq|geq|mid|iff|"
+    r"Rightarrow|quad|qquad|cdot|sqrt|overline|underline|vec|hat|dot|sin|cos|"
+    r"log|ln|sum|prod|int|lim|theta|times|text|textbf|tan|tau|tilde|top|to)\b"
+)
+
+
 def variant_question(row: dict[str, Any], *, complete: Completer | None = None) -> dict[str, Any]:
     """Return a variant of one stored question.
 
     Local recalculation wins. A text model is called only when this item has
     no local solver, and only when a key or an injected completer is available.
     """
+    global _LAST_FINISH
+    _LAST_FINISH = ""
     base = prepare_base(row)
     local = _local_variant(row, base)
     if local.get("supported"):
@@ -75,7 +88,7 @@ def variant_question(row: dict[str, Any], *, complete: Completer | None = None) 
         return local
     extra = ""
     drafted: dict[str, Any] | None = None
-    for _attempt in range(2):
+    for _attempt in range(3):
         try:
             drafted = _from_model(base, caller, extra=extra)
         except Exception as exc:
@@ -93,11 +106,7 @@ def variant_question(row: dict[str, Any], *, complete: Completer | None = None) 
                 return repaired
             if repaired.get("rejected"):
                 drafted = repaired
-        extra = (
-            "上一次结果不能用：要么与底本过于接近，要么题干、选项和详解互相矛盾。"
-            "请更换数据后重新计算。详解的最终结果必须与正确选项一致，"
-            "不要在详解中承认算错或要求改题。"
-        )
+        extra = _retry_instruction(base, drafted or {})
     if drafted and drafted.get("rejected"):
         return drafted
     if drafted and drafted.get("message"):
@@ -172,11 +181,14 @@ def infer_point(stem: str, analysis: str = "", solution: str = "") -> str:
 def _from_model(base: dict[str, Any], complete: Completer, extra: str = "") -> dict[str, Any]:
     user = _base_prompt(base)
     if extra:
-        user = user + "\n\n" + extra
+        user = extra + "\n\n" + user
     raw = complete(VARIANT_SYSTEM, user)
     payload = _parse_json(raw)
     if payload is None:
-        return {"ok": True, "supported": False, "rejected": False, "message": "变式模型没有返回可解析的题目。"}
+        message = "变式模型没有返回可解析的题目。"
+        if _LAST_FINISH == "length":
+            message += "输出在写完 JSON 之前被截断。"
+        return {"ok": True, "supported": False, "rejected": False, "message": message}
     stem = str(payload.get("stem_md") or "").strip()
     solution = str(payload.get("solution_md") or "").strip()
     answer = str(payload.get("answer") or "").strip()
@@ -188,6 +200,8 @@ def _from_model(base: dict[str, Any], complete: Completer, extra: str = "") -> d
             "supported": False,
             "rejected": True,
             "point": base.get("point") or "",
+            "stem_md": stem,
+            "solution_md": solution,
             "message": "生成结果与真题底本过于接近，已拒绝。变式需要改动数据、背景或问法，并重写解答。",
         }
     axis = str(payload.get("axis") or "").strip()
@@ -643,6 +657,8 @@ def _repair_draft(base: dict[str, Any], drafted: dict[str, Any], complete: Compl
             "supported": False,
             "rejected": True,
             "point": drafted.get("point") or "",
+            "stem_md": stem,
+            "solution_md": solution,
             "message": "生成结果与真题底本过于接近，已拒绝。变式需要改动数据、背景或问法，并重写解答。",
         }
     options = []
@@ -689,22 +705,76 @@ def _repair_prompt(drafted: dict[str, Any]) -> str:
     )
 
 
-def _copied(base: dict[str, Any], stem: str, solution: str) -> bool:
+def _retry_instruction(base: dict[str, Any], drafted: dict[str, Any]) -> str:
+    """Tell the model exactly which previous draft failed, and why."""
+    lines = ["上一次结果不能用。请重新变式，不要交同一道题。"]
+    if drafted.get("rejected"):
+        objections = _copy_objections(
+            base,
+            str(drafted.get("stem_md") or ""),
+            str(drafted.get("solution_md") or ""),
+        )
+        if objections:
+            lines.append("检查未通过，必须改掉下面每一条：")
+            lines.extend(f"- {item}" for item in objections)
+        if drafted.get("stem_md"):
+            lines.append("下面这份题干不能再用。数据、背景或问法要改到上面列出的原句和原公式都消失：")
+            lines.append(str(drafted.get("stem_md") or "")[:2000])
+    elif drafted and _inconsistent(drafted):
+        lines.append(
+            "题干、选项和详解互相矛盾。请更换数据后重新计算。"
+            "详解的最终结果必须与正确选项一致，最后一行写成「答案：」加上答案原文。"
+            "不要在详解中承认算错或要求改题。"
+        )
+    elif "可解析" in str(drafted.get("message") or ""):
+        lines.append(
+            "上一次没有输出可解析的 JSON。这次只输出一个 JSON 对象，不要代码围栏，不要在 JSON 前后加说明。"
+            "公式里的每个反斜杠写成两个，字符串里的换行写成 \\\\n，并且 JSON 必须以 } 结束。"
+        )
+        if "截断" in str(drafted.get("message") or ""):
+            lines.append("上一次输出在写完前被截断。请缩短详解，只保留从新数据到答案的必要步骤。")
+    else:
+        lines.append(str(drafted.get("message") or "请更换数据、背景或问法，并按新数据重写解答。"))
+    return "\n".join(lines)
+
+
+def _copy_objections(base: dict[str, Any], stem: str, solution: str) -> list[str]:
+    objections: list[str] = []
     combined = stem + "\n" + solution
-    if any(mark in combined for mark in _SCHOOL_MARKS):
-        return True
+    for mark in _SCHOOL_MARKS:
+        if mark in combined:
+            objections.append(f"出现了“{mark}”，必须删掉。")
+            break
     original = _compact(base.get("stem") or "")
     revised = _compact(stem)
     if original and original == revised:
-        return True
-    if _shares_run(_surface(base.get("stem") or ""), _surface(stem), 12):
-        return True
+        objections.append("题干与底本完全相同，必须改数据、背景或问法。")
+    shared = _shared_hanzi(_surface(base.get("stem") or ""), _surface(stem), 12)
+    if shared:
+        objections.append(f"连续汉字“{shared}”与底本相同，必须把这句改写成另一句话。")
     if len(original) >= 28:
         for index in range(0, len(original) - 27):
             chunk = original[index : index + 28]
             if "\\" in chunk and chunk in revised:
-                return True
-    return False
+                objections.append(f"整段公式“{chunk}”被照搬，必须更换其中的数字或结构。")
+                break
+    return objections
+
+
+def _copied(base: dict[str, Any], stem: str, solution: str) -> bool:
+    return bool(_copy_objections(base, stem, solution))
+
+
+def _shared_hanzi(left: str, right: str, size: int) -> str:
+    right_parts = [part for part in right.split("|") if len(part) >= size]
+    for part in left.split("|"):
+        if len(part) < size:
+            continue
+        for index in range(len(part) - size + 1):
+            chunk = part[index : index + size]
+            if any(chunk in piece for piece in right_parts):
+                return chunk
+    return ""
 
 
 def _surface(text: str) -> str:
@@ -714,21 +784,6 @@ def _surface(text: str) -> str:
     compact = re.sub(r"\\\[[\s\S]*?\\\]", "|", compact)
     compact = re.sub(r"\\[A-Za-z]+", "", compact)
     return re.sub(r"[^0-9A-Za-z\u4e00-\u9fff|]", "", compact)
-
-
-def _shares_run(left: str, right: str, size: int) -> bool:
-    """True when any formula-free piece shares a run. The pipe is a formula break."""
-    right_parts = [part for part in right.split("|") if len(part) >= size]
-    if not right_parts:
-        return False
-    for part in left.split("|"):
-        if len(part) < size:
-            continue
-        seen = {part[index : index + size] for index in range(len(part) - size + 1)}
-        for piece in right_parts:
-            if any(piece[index : index + size] in seen for index in range(len(piece) - size + 1)):
-                return True
-    return False
 
 
 def _base_prompt(base: dict[str, Any]) -> str:
@@ -753,19 +808,138 @@ def _base_prompt(base: dict[str, Any]) -> str:
 
 
 def _parse_json(raw: str) -> dict[str, Any] | None:
-    text = (raw or "").strip()
+    text = (raw or "").strip().lstrip("\ufeff")
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?", "", text).strip()
         text = re.sub(r"```$", "", text).strip()
     start = text.find("{")
+    if start < 0:
+        return None
+    candidates = [text[start:]]
     end = text.rfind("}")
-    if start < 0 or end <= start:
+    if end > start:
+        candidates.insert(0, text[start : end + 1])
+    found = [item for item in (_load_json_object(candidate) for candidate in candidates) if item]
+    if not found:
         return None
-    try:
-        data = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    # A brace inside $x^{2}$ can close a prefix early. Prefer the object that still has the answer.
+    found.sort(
+        key=lambda item: (
+            bool(str(item.get("stem_md") or "").strip()),
+            bool(str(item.get("solution_md") or "").strip()),
+            bool(str(item.get("answer") or "").strip()),
+            len(str(item.get("solution_md") or "")),
+        ),
+        reverse=True,
+    )
+    return found[0]
+
+
+def _load_json_object(candidate: str) -> dict[str, Any] | None:
+    direct = _loads_dict(candidate)
+    if direct is not None and not _LATEX_LEAK.search(candidate):
+        return direct
+    relaxed = _relax_json(candidate)
+    found = _loads_dict(relaxed) or _loads_dict(_close_json(relaxed))
+    if found is not None:
+        return found
+    return direct or _loads_dict(_close_json(candidate))
+
+
+def _loads_dict(text: str) -> dict[str, Any] | None:
+    for item in (text, re.sub(r",(\s*[}\]])", r"\1", text)):
+        try:
+            data = json.loads(item)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
+
+
+def _relax_json(text: str) -> str:
+    """Double LaTeX backslashes that are not already valid JSON escapes."""
+    out: list[str] = []
+    in_string = False
+    index = 0
+    size = len(text)
+    while index < size:
+        char = text[index]
+        if not in_string:
+            out.append(char)
+            if char == '"':
+                in_string = True
+            index += 1
+            continue
+        if char == '"':
+            in_string = False
+            out.append(char)
+            index += 1
+            continue
+        if char == "\\":
+            nxt = text[index + 1] if index + 1 < size else ""
+            if nxt in '"\\/':
+                out.append("\\")
+                out.append(nxt)
+                index += 2
+                continue
+            if nxt == "u" and index + 5 < size and all(c in "0123456789abcdefABCDEF" for c in text[index + 2 : index + 6]):
+                out.append(text[index : index + 6])
+                index += 6
+                continue
+            if nxt in "bfnrt" and not (index + 2 < size and text[index + 2].isalpha()):
+                out.append("\\")
+                out.append(nxt)
+                index += 2
+                continue
+            out.append("\\\\")
+            index += 1
+            continue
+        if char in "\n\r":
+            out.append("\\\\n")
+            index += 1
+            continue
+        if char == "\t":
+            out.append("\\\\t")
+            index += 1
+            continue
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def _close_json(text: str) -> str:
+    """Close a JSON object that was cut off before its final brace."""
+    stack: list[str] = []
+    in_string = False
+    escape = False
+    for char in text:
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            stack.append("}")
+        elif char == "[":
+            stack.append("]")
+        elif char in "}]" and stack and stack[-1] == char:
+            stack.pop()
+    trimmed = text.rstrip()
+    if trimmed.endswith(","):
+        trimmed = trimmed[:-1]
+    suffix = ""
+    if in_string:
+        if escape:
+            suffix += "\\"
+        suffix += '"'
+    suffix += "".join(reversed(stack))
+    return trimmed + suffix
 
 
 def _model_configured() -> bool:
@@ -798,11 +972,29 @@ def _model_complete(system: str, user: str) -> str:
             {"role": "user", "content": user},
         ],
     }
-    reasoning = "reasoner" in model
-    if reasoning:
-        payload["max_tokens"] = 8192
+    # Thinking mode counts the chain of thought against max_tokens. 8192 leaves
+    # almost no room for the JSON, so a long solution is cut off mid-object.
+    thinking = model.startswith("deepseek") and "chat" not in model
+    if thinking:
+        payload["max_tokens"] = 65536
+        payload["response_format"] = {"type": "json_object"}
     else:
         payload["temperature"] = 0.3
+    try:
+        data = _post_chat(url, key, payload, timeout=180 if thinking else 90)
+    except RuntimeError as exc:
+        if "response_format" in payload and "HTTP 400" in str(exc):
+            payload.pop("response_format", None)
+            data = _post_chat(url, key, payload, timeout=180 if thinking else 90)
+        else:
+            raise
+    global _LAST_FINISH
+    choice = (data.get("choices") or [{}])[0]
+    _LAST_FINISH = str(choice.get("finish_reason") or "")
+    return _message_text(choice.get("message") or {})
+
+
+def _post_chat(url: str, key: str, payload: dict[str, Any], *, timeout: int) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -810,16 +1002,32 @@ def _model_complete(system: str, user: str) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=180 if reasoning else 90) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:300]
         raise RuntimeError(f"HTTP {exc.code}: {detail}") from exc
-    message = ((data.get("choices") or [{}])[0].get("message") or {})
+    if not isinstance(data, dict):
+        raise RuntimeError("变式模型没有返回 JSON 响应。")
+    return data
+
+
+def _message_text(message: dict[str, Any]) -> str:
     content = str(message.get("content") or "").strip()
-    if not content:
-        content = str(message.get("reasoning_content") or "")
-    return content
+    if content and (_parse_json(content) is not None or not message.get("reasoning_content")):
+        return content
+    recovered = _json_from_reasoning(str(message.get("reasoning_content") or ""))
+    return recovered or content
+
+
+def _json_from_reasoning(reasoning: str) -> str:
+    marker = reasoning.rfind('"stem_md"')
+    if marker < 0:
+        return ""
+    start = reasoning.rfind("{", 0, marker + 1)
+    if start < 0:
+        return ""
+    return reasoning[start:]
 
 
 def _body(stem: str) -> str:

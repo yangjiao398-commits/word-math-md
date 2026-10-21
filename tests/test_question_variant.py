@@ -71,6 +71,7 @@ def test_prompt_varies_the_base_instead_of_inventing_a_new_item() -> None:
     assert "数据" in VARIANT_SYSTEM and "背景" in VARIANT_SYSTEM and "问法" in VARIANT_SYSTEM
     assert "重新计算" in VARIANT_SYSTEM
     assert "不要" in VARIANT_SYSTEM and "誊抄" in VARIANT_SYSTEM
+    assert "\\\\frac" in VARIANT_SYSTEM
 
 
 def test_local_shape_does_not_call_the_model() -> None:
@@ -189,6 +190,61 @@ def test_twelve_consecutive_hanzi_still_counts_as_a_copy() -> None:
     )
     assert result["supported"] is False
     assert result["rejected"] is True
+
+
+def test_copied_variant_is_resent_with_the_overlapping_phrase() -> None:
+    phrase = "上的单调性并用定义加以证明"
+    calls = {"n": 0}
+
+    def complete(system: str, user: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return json.dumps(
+                {
+                    "point": "函数的单调性",
+                    "essence": "原句没改。",
+                    "axis": "数据",
+                    "changes": ["只换了数字"],
+                    "stem_md": f"已知幂函数 $y=x^{{a}}$。{phrase}。",
+                    "options": [],
+                    "answer": r"$\dfrac{1}{x}$",
+                    "analysis_md": "代入点。",
+                    "solution_md": r"解得指数为 $-1$，所以 $\dfrac{1}{x}$。答案：$\dfrac{1}{x}$",
+                },
+                ensure_ascii=False,
+            )
+        assert "上一次结果不能用" in user
+        assert phrase[:12] in user
+        return json.dumps(
+            {
+                "point": "函数的单调性",
+                "essence": "仍由幂函数上的点求指数，再用定义讨论增减。",
+                "axis": "数据、问法",
+                "changes": ["点改为 (2,1/2)", "问法改为说明增减，不再照抄原句"],
+                "stem_md": r"幂函数 $y=x^{a}$ 的图象过点 $\left(2,\dfrac{1}{2}\right)$。求出解析式，并说明它在 $(0,4)$ 上的增减情况。",
+                "options": [],
+                "answer": r"$\dfrac{1}{x}$",
+                "analysis_md": "由点确定指数。",
+                "solution_md": r"$2^{a}=\dfrac{1}{2}$，所以 $a=-1$，$y=\dfrac{1}{x}$。答案：$\dfrac{1}{x}$",
+            },
+            ensure_ascii=False,
+        )
+
+    result = variant_question(
+        {
+            "id": "q16-copy",
+            "stem_md": f"判断函数在区间上的{phrase}。",
+            "answer_md": r"$\dfrac{1}{x}$",
+            "analysis_md": "幂函数。",
+            "solution_md": "代入。",
+        },
+        complete=complete,
+    )
+    assert calls["n"] == 2
+    assert result["supported"] is True
+    assert result["source"] == "model"
+    assert phrase not in result["stem_md"]
+    assert r"\dfrac{1}{2}" in result["stem_md"]
 
 
 def test_model_variant_is_used_when_it_really_changes_the_base() -> None:
@@ -513,6 +569,82 @@ def test_q15_model_repairs_an_answer_missing_from_the_solution() -> None:
     assert r"\frac{7}{2}" in solution
     assert "需重新" not in result["analysis_md"]
     assert "深圳" not in result["stem_md"]
+
+
+_ELLIPSE = {
+    "id": "conic-variant",
+    "stem_md": "已知椭圆的焦点在 x 轴上，求离心率。",
+    "answer_md": "1/2",
+    "analysis_md": "圆锥曲线",
+    "solution_md": "联立。",
+}
+
+
+def test_unescaped_latex_json_is_accepted() -> None:
+    calls = {"n": 0}
+
+    def complete(system: str, user: str) -> str:
+        calls["n"] += 1
+        return (
+            r'{"point":"函数最值","essence":"换了一个二次函数再求最小值。","axis":"数据",'
+            r'"changes":["把一次项系数从 1 改成 3"],'
+            r'"stem_md":"求函数 $f(x)=\frac{1}{2}x^{2}+3x+\alpha$ 在 $\left[0,1\right]$ 上的最小值。",'
+            r'"options":[],"answer":"$0$","analysis_md":"配方后看区间端点。",'
+            r'"solution_md":"配方得最小值是 $0$。答案：$0$"}'
+        )
+
+    result = variant_question(_ELLIPSE, complete=complete)
+    assert calls["n"] == 1
+    assert result["supported"] is True
+    assert r"\frac{1}{2}" in result["stem_md"]
+    assert r"\alpha" in result["stem_md"]
+    assert r"\left" in result["stem_md"]
+    assert "\x0c" not in result["stem_md"]
+    assert "\x08" not in result["stem_md"]
+
+
+def test_truncated_variant_json_is_closed_and_accepted() -> None:
+    def complete(system: str, user: str) -> str:
+        return (
+            '{"point":"函数最值","essence":"换了函数","axis":"数据","changes":["改系数"],'
+            '"stem_md":"求函数 $g(x)=x^{2}+5x$ 的最小值。","options":[],"answer":"$-4$",'
+            '"analysis_md":"配方。","solution_md":"最小值为 $-4$。答案：$-4$"'
+        )
+
+    result = variant_question(_ELLIPSE, complete=complete)
+    assert result["supported"] is True
+    assert "5x" in result["stem_md"]
+    assert "-4" in result["solution_md"]
+
+
+def test_unparseable_model_output_is_sent_back_for_json() -> None:
+    calls = {"n": 0}
+
+    def complete(system: str, user: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "这道题可以改数字，但这段话不是 JSON。"
+        assert "上一次结果不能用" in user
+        assert "只输出一个 JSON" in user
+        return json.dumps(
+            {
+                "point": "函数最值",
+                "essence": "换了一个函数再求最小值。",
+                "axis": "数据",
+                "changes": ["改了二次项"],
+                "stem_md": r"求函数 $h(x)=2x^{2}-8x$ 的最小值。",
+                "options": [],
+                "answer": "$-8$",
+                "analysis_md": "配方。",
+                "solution_md": r"最小值为 $-8$。答案：$-8$",
+            },
+            ensure_ascii=False,
+        )
+
+    result = variant_question(_ELLIPSE, complete=complete)
+    assert calls["n"] == 2
+    assert result["supported"] is True
+    assert "2x^{2}-8x" in result["stem_md"]
 
 
 def test_unrecognized_question_names_the_point_and_asks_for_a_model(monkeypatch) -> None:

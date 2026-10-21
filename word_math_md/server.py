@@ -1699,9 +1699,19 @@ def index() -> str:
       if (end >= source.length || source[end] !== '$') return null;
       return {{ start: best, end: end + 1, tex: source.slice(best + 1, end), display: false }};
     }}
+    function normalizeVariantMath(text) {{
+      let value = String(text || '');
+      value = value.replace(/\\\\n(?![a-zA-Z])/g, '\\n');
+      value = value.replace(/\\$([^$]+)\\$/g, function(match, body) {{
+        if (body.indexOf('\\\\begin') >= 0) return match;
+        const cleaned = body.replace(/\\\\\\\\/g, ' ').replace(/\\n+/g, ' ');
+        return '$' + cleaned + '$';
+      }});
+      return value;
+    }}
     function renderDollarMath(text) {{
       const root = document.createElement('div');
-      const source = String(text || '');
+      const source = normalizeVariantMath(String(text || ''));
       let cursor = 0;
       while (cursor < source.length) {{
         const found = nextVariantMath(source, cursor);
@@ -1714,7 +1724,7 @@ def index() -> str:
         }}
         const node = document.createElement(found.display ? 'div' : 'span');
         if (window.katex) {{
-          window.katex.render(found.tex.trim(), node, {{ throwOnError: false, displayMode: found.display }});
+          window.katex.render(found.tex.trim(), node, {{ throwOnError: false, displayMode: found.display, output: 'html' }});
         }} else {{
           node.textContent = source.slice(found.start, found.end);
         }}
