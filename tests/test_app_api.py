@@ -97,6 +97,22 @@ def test_content_stays_open_without_a_paid_plan(monkeypatch):
     assert user["membership"]["entitled"] is False
 
 
+def test_paper_page_offers_a_whole_paper_variant():
+    from word_math_md.server import index
+
+    page = index()
+    assert 'id="btnPaperVariants"' in page
+    assert 'id="btnCompareVariants"' in page
+    assert "整卷题型变式" in page
+    assert "对比变式试卷" in page
+    assert "/variant-questions" in page
+    assert "variantWholePaper" in page
+    assert "/api/exam-bank/questions/' + encodeURIComponent(questionId) + '/variant'" in page
+    assert "deepseek解题动画" in page
+    assert "/deepseek-animation" in page
+    assert "deepseekAnimation" in page
+
+
 def test_app_runtime_config_katex_matches_preview():
     cfg = app_runtime_config()
     assert cfg["katex"]["version"] == "0.18.4"

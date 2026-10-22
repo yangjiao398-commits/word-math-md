@@ -85,7 +85,8 @@
     return "=";
   }
 
-  function mount(root, scene) {
+  function mount(root, scene, options) {
+    const autoplay = !!(options && options.autoplay);
     const curves = buildCurves(scene);
     let view = scene.view;
     root.innerHTML =
@@ -116,7 +117,7 @@
     const steps = scene.steps;
     let index = 0;
     let token = 0;
-    let auto = false;
+    let auto = autoplay;
     let timer = 0;
     let frameState = { reveal: 0, pair: 0 };
 
@@ -607,10 +608,12 @@
         paintControls();
         return;
       }
+      const caption = (steps[index] && steps[index].caption) || "";
+      const read = Math.min(6400, 1400 + caption.length * 32);
       timer = window.setTimeout(function () {
         if (my !== token || !auto) return;
         go(index + 1);
-      }, wait);
+      }, Math.max(wait, read));
     }
 
     new ResizeObserver(function () {

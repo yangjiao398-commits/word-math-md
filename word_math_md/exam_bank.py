@@ -1085,6 +1085,249 @@ def get_paper_questions(paper_id: str) -> dict[str, Any]:
     return {"paper": paper.data, "questions": qrows}
 
 
+def _variant_title(title: str) -> str:
+    text = (title or "").strip() or "未命名试卷"
+    if text.endswith("（题型变式）"):
+        return text
+    return f"{text}（题型变式）"
+
+
+def _variant_code(paper_code: str) -> str:
+    code = (paper_code or "").strip() or "paper"
+    if code.endswith("-variant"):
+        return code
+    return f"{code}-variant"
+
+
+def _stem_plain(markdown: str) -> str:
+    text = re.sub(r"\$+", "", markdown or "")
+    return re.sub(r"\s+", " ", text).strip()[:4000]
+
+
+def _clean_variant_options(options: Any) -> list[dict[str, str]]:
+    cleaned = []
+    for opt in options or []:
+        if not isinstance(opt, dict) or not str(opt.get("label") or "").strip():
+            continue
+        cleaned.append(
+            {
+                "label": str(opt.get("label") or "").strip(),
+                "content_md": str(opt.get("content_md") or ""),
+            }
+        )
+    return cleaned
+
+
+def list_variant_papers(limit: int = 50) -> list[dict[str, Any]]:
+    client = _client()
+    res = (
+        client.table("variant_papers")
+        .select(
+            "id,source_paper_id,paper_code,title,question_count,ready_count,"
+            "status,semester,exam_type,province,gaokao_paper,updated_at"
+        )
+        .order("updated_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return list(res.data or [])
+
+
+def save_variant_question(paper_id: str, question_id: str, variant: dict[str, Any]) -> dict[str, Any]:
+    """Store one whole-paper variant item under the source paper's variant paper."""
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise ValueError("无效的试卷 id")
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", question_id or ""):
+        raise ValueError("无效的题目 id")
+    if not isinstance(variant, dict):
+        raise ValueError("变式内容无效")
+    client = _client()
+    found = (
+        client.table("papers")
+        .select("id,paper_code,title,source_filename,semester,exam_type,province,gaokao_paper")
+        .eq("id", paper_id)
+        .limit(1)
+        .execute()
+    )
+    if not found.data:
+        raise ValueError("试卷不存在")
+    paper = found.data[0]
+    qres = (
+        client.table("questions")
+        .select("id,paper_id,question_no,sort_order,type_code,score,knowledge_codes")
+        .eq("id", question_id)
+        .limit(1)
+        .execute()
+    )
+    if not qres.data or qres.data[0].get("paper_id") != paper_id:
+        raise ValueError("题目不属于这套试卷")
+    question = qres.data[0]
+    siblings = (
+        client.table("questions")
+        .select("id")
+        .eq("paper_id", paper_id)
+        .execute()
+    )
+    total = len(siblings.data or [])
+    now = datetime.now(timezone.utc).isoformat()
+    existing = (
+        client.table("variant_papers")
+        .select("id")
+        .eq("source_paper_id", paper_id)
+        .limit(1)
+        .execute()
+    )
+    paper_payload = {
+        "source_paper_id": paper_id,
+        "paper_code": _variant_code(str(paper.get("paper_code") or "")),
+        "title": _variant_title(str(paper.get("title") or "")),
+        "source_filename": paper.get("source_filename") or "",
+        "semester": paper.get("semester") or "",
+        "exam_type": paper.get("exam_type") or "",
+        "province": paper.get("province") or "",
+        "gaokao_paper": paper.get("gaokao_paper") or "",
+        "question_count": total,
+        "updated_at": now,
+    }
+    if existing.data:
+        variant_paper_id = existing.data[0]["id"]
+        client.table("variant_papers").update(paper_payload).eq("id", variant_paper_id).execute()
+    else:
+        inserted = client.table("variant_papers").insert(paper_payload).execute()
+        if not inserted.data:
+            raise ValueError("变式试卷没有写入")
+        variant_paper_id = inserted.data[0]["id"]
+    changes = [str(item) for item in (variant.get("changes") or []) if str(item).strip()]
+    item = {
+        "variant_paper_id": variant_paper_id,
+        "source_question_id": question_id,
+        "question_no": question.get("question_no"),
+        "sort_order": question.get("sort_order") if question.get("sort_order") is not None else question.get("question_no"),
+        "type_code": question.get("type_code") or "solution",
+        "stem_md": str(variant.get("stem_md") or ""),
+        "stem_text": _stem_plain(str(variant.get("stem_md") or "")),
+        "score": question.get("score"),
+        "answer_md": str(variant.get("answer") or variant.get("answer_md") or ""),
+        "analysis_md": str(variant.get("analysis_md") or ""),
+        "solution_md": str(variant.get("solution_md") or ""),
+        "options": _clean_variant_options(variant.get("options")),
+        "point": str(variant.get("point") or ""),
+        "essence": str(variant.get("essence") or ""),
+        "axis": str(variant.get("axis") or ""),
+        "changes": changes,
+        "supported": bool(variant.get("supported")),
+        "message": str(variant.get("message") or ""),
+        "source": str(variant.get("source") or ""),
+        "knowledge_codes": question.get("knowledge_codes") or [],
+        "updated_at": now,
+    }
+    client.table("variant_questions").upsert(
+        item, on_conflict="variant_paper_id,source_question_id"
+    ).execute()
+    saved = (
+        client.table("variant_questions")
+        .select("id,supported")
+        .eq("variant_paper_id", variant_paper_id)
+        .execute()
+    )
+    rows = list(saved.data or [])
+    ready = sum(1 for row in rows if row.get("supported"))
+    status = "complete" if total and len(rows) >= total else "partial"
+    client.table("variant_papers").update(
+        {
+            "question_count": total,
+            "ready_count": ready,
+            "status": status,
+            "updated_at": now,
+        }
+    ).eq("id", variant_paper_id).execute()
+    return {
+        "variant_paper_id": variant_paper_id,
+        "source_paper_id": paper_id,
+        "question_id": question_id,
+        "question_no": question.get("question_no"),
+        "supported": bool(variant.get("supported")),
+        "status": status,
+        "ready_count": ready,
+        "question_count": total,
+    }
+
+
+def get_variant_comparison(paper_id: str) -> dict[str, Any]:
+    """Pair each source question with the saved variant, in paper order."""
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", paper_id or ""):
+        raise ValueError("无效的试卷 id")
+    client = _client()
+    found = (
+        client.table("papers")
+        .select("id,paper_code,title,semester,exam_type,province,gaokao_paper")
+        .eq("id", paper_id)
+        .limit(1)
+        .execute()
+    )
+    if not found.data:
+        raise ValueError("试卷不存在")
+    variants = (
+        client.table("variant_papers")
+        .select(
+            "id,source_paper_id,paper_code,title,question_count,ready_count,"
+            "status,updated_at"
+        )
+        .eq("source_paper_id", paper_id)
+        .limit(1)
+        .execute()
+    )
+    if not variants.data:
+        raise ValueError("这套试卷还没有整卷变式")
+    variant_paper = variants.data[0]
+    questions = (
+        client.table("questions")
+        .select(
+            "id,question_no,sort_order,type_code,stem_md,score,answer_md,"
+            "analysis_md,solution_md"
+        )
+        .eq("paper_id", paper_id)
+        .order("sort_order")
+        .execute()
+    )
+    qrows = list(questions.data or [])
+    options_by_q: dict[str, list] = {row["id"]: [] for row in qrows}
+    ids = [row["id"] for row in qrows]
+    if ids:
+        opts = (
+            client.table("question_options")
+            .select("question_id,label,content_md,sort_order")
+            .in_("question_id", ids)
+            .order("sort_order")
+            .execute()
+        )
+        for opt in opts.data or []:
+            options_by_q.setdefault(opt["question_id"], []).append(opt)
+    saved = (
+        client.table("variant_questions")
+        .select(
+            "source_question_id,question_no,sort_order,type_code,stem_md,score,"
+            "answer_md,analysis_md,solution_md,options,point,essence,axis,changes,"
+            "supported,message,source"
+        )
+        .eq("variant_paper_id", variant_paper["id"])
+        .order("sort_order")
+        .execute()
+    )
+    by_source = {row["source_question_id"]: row for row in (saved.data or [])}
+    pairs = []
+    for row in qrows:
+        row["options"] = options_by_q.get(row["id"], [])
+        pairs.append(
+            {
+                "question_no": row.get("question_no"),
+                "original": row,
+                "variant": by_source.get(row["id"]),
+            }
+        )
+    return {"paper": found.data[0], "variant_paper": variant_paper, "pairs": pairs}
+
+
 def questions_to_markdown(questions: list[dict[str, Any]]) -> str:
     parts: list[str] = []
     for q in questions:

@@ -43,7 +43,10 @@ from word_math_md.exam_bank import (
     list_answer_sheets,
     list_knowledge_points,
     delete_paper,
+    get_variant_comparison,
     list_papers,
+    list_variant_papers,
+    save_variant_question,
     list_questions_by_knowledge,
     paper_filter_options,
     questions_to_markdown,
@@ -73,6 +76,7 @@ from word_math_md.plane_scenes import (
 )
 from word_math_md.question_rewrite import rewrite_question
 from word_math_md.question_variant import variant_question
+from word_math_md.deepseek_animation import generate_animation
 from word_math_md.knowledge_courseware import (
     delete_courseware,
     list_courseware,
@@ -524,6 +528,21 @@ def index() -> str:
     .paper-preview-bar button {{
       width: auto; margin: 0; padding: 10px 18px; font-size: 0.95rem;
     }}
+    .compare-bar {{
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px;
+    }}
+    .compare-bar button {{ width: auto; margin: 0; }}
+    .compare-grid {{
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }}
+    .compare-col {{
+      border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+      background: #12181f; line-height: 1.7;
+    }}
+    .compare-col h3 {{ margin: 0 0 8px; font-size: 1rem; }}
+    @media (max-width: 800px) {{
+      .compare-grid {{ grid-template-columns: 1fr; }}
+    }}
     .print-paper-title {{ font-weight: 650; line-height: 1.5; margin: 0 0 12px; }}
     body.viewing-paper .brand,
     body.viewing-paper h1,
@@ -821,6 +840,7 @@ def index() -> str:
         <button type="button" class="secondary" id="btnImportMd">导入 Markdown 到题库</button>
         <button type="button" class="secondary" id="btnBatchImport">批量导入试卷</button>
         <button type="button" class="secondary" id="btnListPapers">查看已入库试卷</button>
+        <button type="button" class="secondary" id="btnCompareVariants">对比变式试卷</button>
         <button type="button" class="secondary" id="btnKpAdmin">维护知识点</button>
         <button type="button" class="secondary" id="btnPractice">知识点专项训练</button>
       </div>
@@ -1291,6 +1311,8 @@ def index() -> str:
         html += '<div class="paper-preview-bar no-print" id="paperPreviewBar">' +
           '<button type="button" class="secondary" id="btnBackPapers">返回试卷列表</button>' +
           '<button type="button" id="btnPrintPaper">打印试卷</button>' +
+          '<button type="button" class="secondary" id="btnPaperVariants" data-paper-id="' +
+          esc(paper.id || '') + '">整卷题型变式</button>' +
           '<button type="button" class="secondary" id="btnUploadSheetPreview" data-upload-sheet data-paper-id="' +
           esc(paper.id || '') + '" data-paper-title="' + esc(paper.title || paper.paper_code || '') +
           '">上传答卷评分</button>' +
@@ -1366,6 +1388,11 @@ def index() -> str:
           if (q.question_id && window.QuestionPlane && window.QuestionPlane.lessons[q.question_id]) {{
             card += '<button type="button" class="vs-open" data-plane-q="' +
               esc(q.question_id) + '">cursor解题动画</button>';
+          }}
+          if (q.question_id) {{
+            card += '<button type="button" class="vs-open" data-ds-anim="' +
+              esc(q.question_id) + '" data-ds-no="' + esc(q.index) +
+              '">deepseek解题动画</button>';
           }}
           card += '<span class="muted">动画演示审题、建模与求解思路</span>';
           card += '</div>';
@@ -1601,6 +1628,143 @@ def index() -> str:
       }}
     }}
     btnListPapers.addEventListener('click', () => listBankPapers());
+    const btnCompareVariants = document.getElementById('btnCompareVariants');
+    let compareState = null;
+    function appendCompareMath(parent, title, text) {{
+      const heading = document.createElement('h4');
+      heading.textContent = title;
+      parent.appendChild(heading);
+      parent.appendChild(renderDollarMath(text || ''));
+    }}
+    function fillCompareColumn(col, heading, item, variantSide) {{
+      const title = document.createElement('h3');
+      title.textContent = heading;
+      col.appendChild(title);
+      if (!item) {{
+        const empty = document.createElement('p');
+        empty.textContent = '这道题还没有保存变式。';
+        col.appendChild(empty);
+        return;
+      }}
+      if (variantSide && item.supported === false) {{
+        const note = document.createElement('p');
+        note.textContent = item.message || '这道题没有生成成功。';
+        col.appendChild(note);
+      }}
+      if (variantSide && item.point) {{
+        const point = document.createElement('p');
+        point.appendChild(document.createTextNode('考点：'));
+        const math = renderDollarMath(item.point);
+        while (math.firstChild) point.appendChild(math.firstChild);
+        col.appendChild(point);
+      }}
+      appendCompareMath(col, '题干', item.stem_md || '');
+      const options = item.options || [];
+      if (options.length) {{
+        const optionsHeading = document.createElement('h4');
+        optionsHeading.textContent = '选项';
+        col.appendChild(optionsHeading);
+        options.forEach(function(opt) {{
+          const row = document.createElement('div');
+          row.appendChild(document.createTextNode((opt.label || '') + '. '));
+          const math = renderDollarMath(opt.content_md || '');
+          while (math.firstChild) row.appendChild(math.firstChild);
+          col.appendChild(row);
+        }});
+      }}
+      appendCompareMath(col, '【答案】', item.answer_md || '');
+      appendCompareMath(col, '【分析】', item.analysis_md || '');
+      appendCompareMath(col, '【详解】', item.solution_md || '');
+    }}
+    function renderComparePair() {{
+      if (!compareState) return;
+      const pairs = compareState.pairs || [];
+      const index = Math.max(0, Math.min(compareState.index, pairs.length - 1));
+      compareState.index = index;
+      const pair = pairs[index] || {{}};
+      questions.innerHTML = '';
+      const bar = document.createElement('div');
+      bar.className = 'compare-bar no-print';
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'secondary';
+      back.textContent = '返回变式列表';
+      back.setAttribute('data-compare-nav', 'back');
+      const prev = document.createElement('button');
+      prev.type = 'button';
+      prev.className = 'secondary';
+      prev.textContent = '上一题';
+      prev.disabled = index <= 0;
+      prev.setAttribute('data-compare-nav', 'prev');
+      const next = document.createElement('button');
+      next.type = 'button';
+      next.className = 'secondary';
+      next.textContent = '下一题';
+      next.disabled = index >= pairs.length - 1;
+      next.setAttribute('data-compare-nav', 'next');
+      const label = document.createElement('span');
+      label.textContent = '第 ' + (pair.question_no || index + 1) + ' 题 · ' + (index + 1) + '/' + pairs.length;
+      bar.appendChild(back);
+      bar.appendChild(prev);
+      bar.appendChild(next);
+      bar.appendChild(label);
+      const grid = document.createElement('div');
+      grid.className = 'compare-grid';
+      const left = document.createElement('div');
+      left.className = 'compare-col';
+      const right = document.createElement('div');
+      right.className = 'compare-col';
+      fillCompareColumn(left, '原题', pair.original, false);
+      fillCompareColumn(right, '变式', pair.variant, true);
+      grid.appendChild(left);
+      grid.appendChild(right);
+      questions.appendChild(bar);
+      questions.appendChild(grid);
+      questions.hidden = false;
+    }}
+    async function openVariantCompare(paperId) {{
+      result.textContent = '正在读取变式对照…';
+      try {{
+        const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(paperId) + '/variant-comparison');
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        compareState = {{ pairs: data.pairs || [], index: 0, paperId: paperId }};
+        const title = (data.variant_paper && data.variant_paper.title) || (data.paper && data.paper.title) || '变式试卷';
+        result.textContent = title + ' · 左右对照原题和变式。';
+        renderComparePair();
+      }} catch (err) {{
+        result.textContent = '读取变式对照失败: ' + err.message;
+      }}
+    }}
+    async function listVariantPapers() {{
+      document.body.classList.remove('viewing-paper', 'has-paper-masthead');
+      result.classList.remove('paper-view');
+      compareState = null;
+      btnCompareVariants.disabled = true;
+      result.textContent = '正在读取变式试卷…';
+      try {{
+        const res = await fetch('/api/exam-bank/variant-papers');
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        const rows = data.papers || [];
+        result.textContent = rows.length ? ('已保存 ' + rows.length + ' 套变式试卷。点击名称逐题对照。') : '还没有整卷变式。请先打开一套试卷，使用「整卷题型变式」。';
+        questions.innerHTML = rows.map(function(p) {{
+          const done = (p.ready_count || 0) + '/' + (p.question_count || 0);
+          return '<article class="q-card paper-card">' +
+            '<div class="q-meta"><span class="chip">' + esc(p.paper_code || '') + '</span>' +
+            '<span class="chip">已生成 ' + esc(done) + '</span>' +
+            '<span class="chip">' + (p.status === 'complete' ? '已完成' : '未完成') + '</span></div>' +
+            '<div class="paper-title rich-content" data-compare-paper="' + esc(p.source_paper_id) +
+            '" role="button" tabindex="0">' + esc(p.title || '') + '</div></article>';
+        }}).join('') || '<p>还没有整卷变式。</p>';
+        questions.hidden = false;
+      }} catch (err) {{
+        result.textContent = '读取变式试卷失败: ' + err.message;
+      }} finally {{
+        btnCompareVariants.disabled = false;
+      }}
+    }}
+    btnCompareVariants.addEventListener('click', () => listVariantPapers());
     async function deleteBankPaper(paperId, title, btn) {{
       const label = title || '该试卷';
       if (!paperId) return;
@@ -1803,16 +1967,42 @@ def index() -> str:
       appendRewriteMath(panel, '【分析】', data.analysis_md || '');
       appendRewriteMath(panel, '【详解】', data.solution_md || '');
     }}
-    async function variantQuestion(btn) {{
+    async function deepseekAnimation(btn) {{
+      const questionId = btn.getAttribute('data-ds-anim') || '';
+      const questionNo = btn.getAttribute('data-ds-no') || '';
+      if (!questionId || btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = '正在调用 DeepSeek…';
+      result.textContent = '正在调用 DeepSeek 生成第 ' + questionNo + ' 题的解题动画…';
+      try {{
+        const res = await fetch('/api/exam-bank/questions/' + encodeURIComponent(questionId) + '/deepseek-animation', {{
+          method: 'POST',
+        }});
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.detail || data.message || '生成失败');
+        if (!data.supported || !data.href) throw new Error(data.message || '生成失败');
+        if (window.QuestionPlane) {{
+          window.QuestionPlane.lessons[questionId] = {{
+            title: data.title || 'DeepSeek 解题动画',
+            href: data.href,
+          }};
+          window.QuestionPlane.open(questionId);
+        }} else {{
+          window.open(data.href, '_blank');
+        }}
+        result.textContent = '第 ' + questionNo + ' 题的 DeepSeek 解题动画已打开。';
+      }} catch (err) {{
+        result.textContent = 'DeepSeek 解题动画失败: ' + err.message;
+        alert('DeepSeek 解题动画失败: ' + err.message);
+      }} finally {{
+        btn.disabled = false;
+        btn.textContent = 'deepseek解题动画';
+      }}
+    }}
+    async function generateVariant(btn) {{
       const card = btn.closest('article');
       const questionId = btn.getAttribute('data-variant') || '';
-      if (!card || !questionId) return;
-      const panel = card.querySelector('.variant-panel');
-      if (panel && !panel.hidden && btn.dataset.loaded === '1') {{
-        panel.hidden = true;
-        btn.textContent = '题型变式';
-        return;
-      }}
+      if (!card || !questionId) return null;
       btn.disabled = true;
       btn.textContent = '正在生成变式…';
       try {{
@@ -1823,20 +2013,118 @@ def index() -> str:
         if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
         showVariant(card, data);
         btn.dataset.loaded = '1';
+        btn.dataset.variantOk = data.supported ? '1' : '0';
+        variantCache.set(questionId, data);
         btn.textContent = '收起变式';
+        return data;
       }} catch (err) {{
         showVariant(card, {{ supported: false, message: '变式失败: ' + err.message }});
+        btn.dataset.variantOk = '0';
         btn.textContent = '题型变式';
+        return null;
       }} finally {{
         btn.disabled = false;
       }}
     }}
+    async function variantQuestion(btn) {{
+      const card = btn.closest('article');
+      const questionId = btn.getAttribute('data-variant') || '';
+      if (!card || !questionId) return;
+      const panel = card.querySelector('.variant-panel');
+      if (panel && !panel.hidden && btn.dataset.loaded === '1') {{
+        panel.hidden = true;
+        btn.textContent = '题型变式';
+        return;
+      }}
+      await generateVariant(btn);
+    }}
+    let paperVariantRunning = false;
+    const variantCache = new Map();
+    async function persistVariant(paperId, questionId, data) {{
+      if (!paperId || !questionId || !data) return;
+      const res = await fetch('/api/exam-bank/papers/' + encodeURIComponent(paperId) + '/variant-questions', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ question_id: questionId, variant: data }}),
+      }});
+      const saved = await readJson(res);
+      if (!res.ok) throw new Error(saved.detail || '保存变式失败');
+    }}
+    async function variantWholePaper(btn) {{
+      const buttons = Array.from(questions.querySelectorAll('article [data-variant]'));
+      if (!buttons.length || paperVariantRunning) return;
+      const openCount = buttons.filter(function(item) {{
+        const panel = item.closest('article').querySelector('.variant-panel');
+        return panel && !panel.hidden;
+      }}).length;
+      if (openCount === buttons.length) {{
+        buttons.forEach(function(item) {{
+          const panel = item.closest('article').querySelector('.variant-panel');
+          if (panel) panel.hidden = true;
+          item.textContent = '题型变式';
+        }});
+        btn.textContent = '整卷题型变式';
+        return;
+      }}
+      paperVariantRunning = true;
+      btn.disabled = true;
+      const paperId = btn.getAttribute('data-paper-id') || '';
+      let saveErrors = 0;
+      try {{
+        for (let i = 0; i < buttons.length; i += 1) {{
+          const item = buttons[i];
+          const questionId = item.getAttribute('data-variant') || '';
+          btn.textContent = '正在生成整卷变式 ' + (i + 1) + '/' + buttons.length + '…';
+          const card = item.closest('article');
+          const panel = card.querySelector('.variant-panel');
+          let data = null;
+          if (item.dataset.loaded === '1' && panel && variantCache.has(questionId)) {{
+            panel.hidden = false;
+            item.textContent = '收起变式';
+            data = variantCache.get(questionId);
+          }} else {{
+            card.scrollIntoView({{ block: 'nearest' }});
+            data = await generateVariant(item);
+          }}
+          if (!data) continue;
+          try {{
+            await persistVariant(paperId, questionId, data);
+          }} catch (err) {{
+            saveErrors += 1;
+          }}
+        }}
+      }} finally {{
+        paperVariantRunning = false;
+        btn.disabled = false;
+      }}
+      const missed = buttons.filter(function(item) {{ return item.dataset.variantOk !== '1'; }}).length;
+      btn.textContent = missed ? ('收起整卷变式（' + missed + ' 题未生成）') : '收起整卷变式';
+      if (saveErrors) {{
+        result.textContent = '整卷变式已显示，有 ' + saveErrors + ' 题未能写入变式试卷。';
+      }} else if (paperId) {{
+        result.textContent = '整卷变式已保存。可点「对比变式试卷」逐题对照。';
+      }}
+    }}
     questions.addEventListener('click', (ev) => {{
+      const paperVariants = ev.target.closest('#btnPaperVariants');
+      if (paperVariants && questions.contains(paperVariants)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        variantWholePaper(paperVariants);
+        return;
+      }}
       const variantBtn = ev.target.closest('[data-variant]');
       if (variantBtn && questions.contains(variantBtn)) {{
         ev.preventDefault();
         ev.stopPropagation();
         variantQuestion(variantBtn);
+        return;
+      }}
+      const dsAnim = ev.target.closest('[data-ds-anim]');
+      if (dsAnim && questions.contains(dsAnim)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        deepseekAnimation(dsAnim);
         return;
       }}
       const planeEdit = ev.target.closest('[data-plane-edit]');
@@ -1921,6 +2209,23 @@ def index() -> str:
             alert('加载课件失败: ' + err.message);
           }});
         }}
+        return;
+      }}
+      const compareNav = ev.target.closest('[data-compare-nav]');
+      if (compareNav && questions.contains(compareNav) && compareState) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        const action = compareNav.getAttribute('data-compare-nav');
+        if (action === 'back') listVariantPapers();
+        else if (action === 'prev') {{ compareState.index -= 1; renderComparePair(); }}
+        else if (action === 'next') {{ compareState.index += 1; renderComparePair(); }}
+        return;
+      }}
+      const compareTitle = ev.target.closest('[data-compare-paper]');
+      if (compareTitle && questions.contains(compareTitle)) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+        openVariantCompare(compareTitle.getAttribute('data-compare-paper'));
         return;
       }}
       if (ev.target.closest('[data-paper-meta]')) return;
@@ -2439,7 +2744,7 @@ def index() -> str:
   </script>
   <script src="/static/knowledge-courseware.js?v=7"></script>
   <script src="/static/question-plane.js?v=10"></script>
-  <script src="/static/visual-solve.js"></script>
+  <script src="/static/visual-solve.js?v=q8c"></script>
 </body>
 </html>"""
 
@@ -2767,6 +3072,48 @@ def api_list_papers(
     )
 
 
+@app.get("/api/exam-bank/variant-papers")
+def api_list_variant_papers() -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        papers = list_variant_papers()
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, "papers": papers})
+
+
+class VariantItemIn(BaseModel):
+    question_id: str
+    variant: dict
+
+
+@app.post("/api/exam-bank/papers/{paper_id}/variant-questions")
+def api_save_variant_question(paper_id: str, body: VariantItemIn) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        saved = save_variant_question(paper_id, body.question_id, body.variant)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, **saved})
+
+
+@app.get("/api/exam-bank/papers/{paper_id}/variant-comparison")
+def api_variant_comparison(paper_id: str) -> JSONResponse:
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        payload = get_variant_comparison(paper_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"ok": True, **payload})
+
+
 class PaperMetaIn(BaseModel):
     semester: str | None = None
     exam_type: str | None = None
@@ -3039,6 +3386,25 @@ def api_plane_scene_source(question_id: str) -> JSONResponse:
             "scene": scene,
         }
     )
+
+
+@app.post("/api/exam-bank/questions/{question_id}/deepseek-animation")
+def api_deepseek_animation(question_id: str) -> JSONResponse:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", question_id or ""):
+        raise HTTPException(400, "无效的题目 id")
+    if not exam_bank_configured():
+        raise HTTPException(503, "未配置 Supabase 题库。")
+    try:
+        rows = get_questions_by_ids([question_id])
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+    if not rows:
+        raise HTTPException(404, "题目不存在")
+    try:
+        payload = generate_animation(rows[0])
+    except Exception as exc:
+        payload = {"ok": True, "supported": False, "message": f"解题动画生成失败：{exc}"}
+    return JSONResponse(payload)
 
 
 @app.post("/api/exam-bank/questions/{question_id}/variant")

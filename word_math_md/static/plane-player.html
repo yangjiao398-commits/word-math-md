@@ -21,7 +21,7 @@
     <div id="stage">正在加载演示…</div>
   </main>
   <script src="/vendor/katex/katex.min.js"></script>
-  <script src="/static/plane-scene.js?v=11"></script>
+  <script src="/static/plane-scene.js?v=12"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const sceneUrl = params.get("scene") || "";
@@ -40,7 +40,7 @@
           document.getElementById("lead").textContent = scene.meta || "";
           const stage = document.getElementById("stage");
           stage.textContent = "";
-          window.PlanePlayer.mount(stage, scene);
+          window.PlanePlayer.mount(stage, scene, { autoplay: params.get("auto") === "1" });
         })
         .catch(function (err) {
           const stage = document.getElementById("stage");

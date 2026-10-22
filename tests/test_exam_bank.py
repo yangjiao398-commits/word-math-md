@@ -1,7 +1,11 @@
 import re
+import uuid
 
 from word_math_md.exam_bank import (
     delete_paper,
+    get_variant_comparison,
+    list_variant_papers,
+    save_variant_question,
     PAPER_EXAM_TYPES,
     PAPER_GAOKAO_PAPERS,
     PAPER_PROVINCES,
@@ -268,6 +272,10 @@ class _FakeQuery:
         self._eq = {}
         self._in = {}
         self._delete = False
+        self._op = ""
+        self._payload = None
+        self._conflict = ""
+        self._order = None
 
     def select(self, *_a, **_k):
         return self
@@ -283,28 +291,71 @@ class _FakeQuery:
     def limit(self, _n):
         return self
 
+    def order(self, column, desc=False):
+        self._order = (column, bool(desc))
+        return self
+
     def delete(self):
         self._delete = True
         return self
 
+    def insert(self, row):
+        self._op = "insert"
+        self._payload = row
+        return self
+
+    def update(self, row):
+        self._op = "update"
+        self._payload = row
+        return self
+
+    def upsert(self, row, on_conflict=""):
+        self._op = "upsert"
+        self._payload = row
+        self._conflict = on_conflict
+        return self
+
+    def _matches(self, row):
+        if any(row.get(key) != value for key, value in self._eq.items()):
+            return False
+        for key, values in self._in.items():
+            if row.get(key) not in values:
+                return False
+        return True
+
     def execute(self):
         rows = self.client.tables.setdefault(self.name, [])
         if self._delete:
-            if self._eq:
-                key, value = next(iter(self._eq.items()))
-                self.client.tables[self.name] = [row for row in rows if row.get(key) != value]
-            elif self._in:
-                key, values = next(iter(self._in.items()))
-                keep = set(values)
-                self.client.tables[self.name] = [row for row in rows if row.get(key) not in keep]
-            else:
-                self.client.tables[self.name] = []
+            self.client.tables[self.name] = [row for row in rows if not self._matches(row)]
             self.client.deletes.append(self.name)
             return _FakeResult([])
-        filtered = rows
-        for key, value in self._eq.items():
-            filtered = [row for row in filtered if row.get(key) == value]
-        return _FakeResult(list(filtered))
+        if self._op == "insert":
+            item = dict(self._payload)
+            item.setdefault("id", str(uuid.uuid4()))
+            rows.append(item)
+            return _FakeResult([item])
+        if self._op == "update":
+            matched = []
+            for row in rows:
+                if self._matches(row):
+                    row.update(self._payload)
+                    matched.append(row)
+            return _FakeResult(matched)
+        if self._op == "upsert":
+            keys = [key.strip() for key in (self._conflict or "id").split(",") if key.strip()]
+            found = next((row for row in rows if all(row.get(key) == self._payload.get(key) for key in keys)), None)
+            if found is None:
+                found = dict(self._payload)
+                found.setdefault("id", str(uuid.uuid4()))
+                rows.append(found)
+            else:
+                found.update(self._payload)
+            return _FakeResult([found])
+        filtered = [row for row in rows if self._matches(row)]
+        if self._order:
+            column, desc = self._order
+            filtered.sort(key=lambda row: row.get(column) or 0, reverse=desc)
+        return _FakeResult(filtered)
 
 
 class _FakeClient:
@@ -349,6 +400,91 @@ def test_delete_paper_removes_questions_and_paper(monkeypatch):
     assert client.tables["answer_sheet_items"] == []
     assert client.tables["assets"] == []
     assert "demo/a.png" in client.storage.removed
+
+
+def test_save_variant_question_then_compare_with_the_original(monkeypatch):
+    paper_id = "11111111-1111-1111-1111-111111111111"
+    question_id = "22222222-2222-2222-2222-222222222222"
+    client = _FakeClient(
+        {
+            "papers": [
+                {
+                    "id": paper_id,
+                    "paper_code": "SZ-01",
+                    "title": "月考",
+                    "source_filename": "paper.md",
+                    "semester": "高一上学期",
+                    "exam_type": "月考",
+                    "province": "广东",
+                    "gaokao_paper": "",
+                }
+            ],
+            "questions": [
+                {
+                    "id": question_id,
+                    "paper_id": paper_id,
+                    "question_no": 1,
+                    "sort_order": 1,
+                    "type_code": "single_choice",
+                    "score": 5,
+                    "stem_md": "原题 $x$",
+                    "answer_md": "A",
+                    "analysis_md": "原分析",
+                    "solution_md": "原详解",
+                    "knowledge_codes": ["1.1"],
+                }
+            ],
+            "question_options": [
+                {"question_id": question_id, "label": "A", "content_md": "$1$", "sort_order": 1}
+            ],
+            "variant_papers": [],
+            "variant_questions": [],
+        }
+    )
+    monkeypatch.setattr("word_math_md.exam_bank._client", lambda: client)
+    saved = save_variant_question(
+        paper_id,
+        question_id,
+        {
+            "supported": True,
+            "source": "local",
+            "point": "集合",
+            "essence": "换数据",
+            "axis": "数据",
+            "changes": ["数字改了"],
+            "stem_md": "变式 $y$",
+            "options": [{"label": "A", "content_md": "$2$"}],
+            "answer": "A",
+            "analysis_md": "新分析",
+            "solution_md": "新详解",
+        },
+    )
+    assert saved["status"] == "complete"
+    assert saved["ready_count"] == 1
+    again = save_variant_question(
+        paper_id,
+        question_id,
+        {
+            "supported": True,
+            "stem_md": "第二次变式 $z$",
+            "answer": "B",
+            "options": [],
+            "analysis_md": "",
+            "solution_md": "第二次详解",
+        },
+    )
+    assert again["variant_paper_id"] == saved["variant_paper_id"]
+    assert len(client.tables["variant_papers"]) == 1
+    assert len(client.tables["variant_questions"]) == 1
+    assert client.tables["variant_questions"][0]["stem_md"] == "第二次变式 $z$"
+    listed = list_variant_papers()
+    assert listed[0]["title"] == "月考（题型变式）"
+    compared = get_variant_comparison(paper_id)
+    pair = compared["pairs"][0]
+    assert pair["original"]["stem_md"] == "原题 $x$"
+    assert pair["original"]["options"][0]["content_md"] == "$1$"
+    assert pair["variant"]["stem_md"] == "第二次变式 $z$"
+    assert pair["variant"]["answer_md"] == "B"
 
 
 def test_delete_paper_rejects_missing_and_invalid_ids(monkeypatch):

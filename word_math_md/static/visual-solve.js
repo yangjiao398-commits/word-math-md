@@ -179,7 +179,72 @@
     return "compute";
   }
 
+  function isShenzhenLabQ8(q) {
+    if (!q) return false;
+    if (q.question_id === "fc66d711-9313-44ea-8398-478803c215f7") return true;
+    const text = htmlToText(q.stemHtml || "");
+    return (
+      text.includes("两个零点") &&
+      text.includes("单调") &&
+      text.includes("只有一个零点") &&
+      /[aA]\s*x/.test(text) &&
+      /[−-]1/.test(text)
+    );
+  }
+
+  function buildShenzhenLabQ8() {
+    return {
+      scene: "q8",
+      subtitle: "按详解的两条路径看：对称轴在区间右侧，或在区间左侧。",
+      points: [],
+      fns: [],
+      interval: null,
+      steps: [
+        {
+          phase: "read",
+          title: "审题：三个条件要同时成立",
+          html:
+            "<p>f(x) = x² + ax + 2。开口向上，要有两个零点，在开区间 (−1, 2) 上单调，并且这个区间里恰好有一个零点。</p>",
+          graph: { mode: "interval" },
+        },
+        {
+          phase: "model",
+          title: "建模：对称轴决定单调区间",
+          html:
+            "<p>判别式 a² − 8 &gt; 0 才有两个零点，即 |a| &gt; 2√2。对称轴是 x = −a/2：左侧递减，右侧递增。整个 (−1, 2) 要单调，对称轴不能落进这个区间，只能在 2 的右侧，或在 −1 的左侧。图中先取 a = −4，对称轴正好在 x = 2。</p>",
+          graph: { mode: "curve", a: -4, vertex: true },
+        },
+        {
+          phase: "compute",
+          title: "情形一：区间落在递减段",
+          html:
+            "<p>(−1, 2) 全部落在对称轴左侧，就是 −a/2 ≥ 2，即 a ≤ −4。此时函数在区间上递减，只要 f(−1) &gt; 0 且 f(2) &lt; 0，就会由正变负，恰有一个零点。</p>" +
+            "<p>f(−1) = 3 − a，f(2) = 6 + 2a。a ≤ −4 时这两个不等式都成立。图中 a = −4：f(−1) = 7，f(2) = −2，区间内的零点是 2 − √2。</p>",
+          graph: { mode: "curve", a: -4, vertex: true, signs: true, root: true },
+        },
+        {
+          phase: "compute",
+          title: "情形二：区间落在递增段",
+          html:
+            "<p>(−1, 2) 全部落在对称轴右侧，就是 −a/2 ≤ −1，即 a ≥ 2。递增时要 f(−1) &lt; 0 且 f(2) &gt; 0，也就是 a &gt; 3 且 a &gt; −3。和 a ≥ 2 合起来是 a &gt; 3。</p>" +
+            "<p>图中取 a = 4，对称轴在 x = −2。f(−1) = −1，f(2) = 14，由负变正，区间内的零点是 −2 + √2。a = 3 时零点是 −1，落在开区间外面，所以 3 不能取到。</p>",
+          graph: { mode: "curve", a: 4, vertex: true, signs: true, root: true },
+        },
+        {
+          phase: "conclude",
+          title: "结论：对照选项",
+          html:
+            "<p>a ≤ −4 或 a &gt; 3 都已经满足 |a| &gt; 2√2，两个零点的条件不再把范围缩小。取值范围是 (−∞, −4] ∪ (3, +∞)。</p>" +
+            "<p>A 只保证两个零点。B 里的 −3 让对称轴落在区间内部，不单调。D 把 a = 2 算进去了，此时 f(−1) = 1、f(2) = 10，两端同号，区间内没有零点。故选 C。</p>",
+          graph: { mode: "answer" },
+          op: "answer",
+        },
+      ],
+    };
+  }
+
   function buildSteps(q) {
+    if (isShenzhenLabQ8(q)) return buildShenzhenLabQ8();
     const blob =
       htmlToText(q.stemHtml) +
       " " +
@@ -316,9 +381,134 @@
       .join(" ");
   }
 
+  function q8Y(a, x) {
+    return x * x + a * x + 2;
+  }
+
+  function q8Root(a) {
+    const disc = a * a - 8;
+    if (disc <= 0) return null;
+    const s = Math.sqrt(disc);
+    const roots = [(-a - s) / 2, (-a + s) / 2].filter((r) => r > -1 && r < 2);
+    return roots.length === 1 ? roots[0] : null;
+  }
+
+  function drawQ8(svg, pack, stepIndex, localT) {
+    const t = Math.max(0, Math.min(1, localT));
+    const step = pack.steps[stepIndex] || {};
+    const graph = step.graph || { mode: "interval" };
+    const xr = { min: -4.4, max: 4.6 };
+    const yr = { min: -4.4, max: 16.8 };
+    let inner = `<rect x="0" y="0" width="${W}" height="${H}" fill="#f7faf8"/>`;
+    inner += `<text x="16" y="24" fill="#5f7266" font-size="12">${escapeXml(sceneLabel("q8"))}</text>`;
+
+    if (graph.mode === "answer") {
+      const y = 168;
+      const a0 = -8;
+      const a1 = 6;
+      const x0 = PAD + 8;
+      const x1 = W - PAD;
+      const mapA = (v) => x0 + ((v - a0) / (a1 - a0)) * (x1 - x0);
+      const shown = x0 + (x1 - x0) * Math.min(1, 0.25 + t * 0.75);
+      inner += `<line x1="${x0}" y1="${y}" x2="${shown.toFixed(1)}" y2="${y}" stroke="#5f7266" stroke-width="2"/>`;
+      inner += `<polygon points="${shown},${y} ${shown - 10},${y - 5} ${shown - 10},${y + 5}" fill="#5f7266"/>`;
+      inner += `<text x="${x1 - 4}" y="${y - 14}" text-anchor="end" fill="#5f7266" font-size="13">a</text>`;
+      const left = mapA(-4);
+      const right = mapA(3);
+      if (t > 0.15) {
+        inner += `<line x1="${x0}" y1="${y}" x2="${left}" y2="${y}" stroke="#2f6f4e" stroke-width="8" stroke-linecap="butt" opacity="0.7"/>`;
+        inner += circle(left, y, false);
+        inner += `<text x="${(x0 + left) / 2}" y="${y - 18}" text-anchor="middle" fill="#2f6f4e" font-size="13">(−∞, −4]</text>`;
+      }
+      if (t > 0.45) {
+        const end = Math.min(x1 - 16, shown);
+        if (end > right) {
+          inner += `<line x1="${right}" y1="${y}" x2="${end}" y2="${y}" stroke="#2f6f4e" stroke-width="8" stroke-linecap="butt" opacity="0.7"/>`;
+        }
+        inner += circle(right, y, true);
+        inner += `<text x="${(right + x1) / 2}" y="${y - 18}" text-anchor="middle" fill="#2f6f4e" font-size="13">(3, +∞)</text>`;
+      }
+      [
+        [-4, "−4", 0.2],
+        [-3, "−3 不单调", 0.55],
+        [2, "2 没有零点", 0.7],
+        [3, "3", 0.5],
+      ].forEach(([v, lab, when]) => {
+        if (t < when) return;
+        const x = mapA(v);
+        const bad = v === -3 || v === 2;
+        inner += `<line x1="${x}" y1="${y - 8}" x2="${x}" y2="${y + 8}" stroke="${bad ? "#b85c38" : "#5f7266"}" stroke-width="1.4"/>`;
+        inner += `<text x="${x}" y="${y + (bad ? 48 : 26)}" text-anchor="middle" fill="${bad ? "#b85c38" : "#1a222c"}" font-size="12">${lab}</text>`;
+      });
+      inner += `<text x="360" y="78" text-anchor="middle" fill="#2f6f4e" font-size="18" font-weight="700" opacity="${t}">选项 C　(−∞, −4] ∪ (3, +∞)</text>`;
+      svg.innerHTML = inner;
+      return;
+    }
+
+    const ox = sx(0, xr);
+    const oy = sy(0, yr);
+    inner += `<line x1="${PAD}" y1="${oy}" x2="${W - 24}" y2="${oy}" stroke="#5f7266" stroke-width="1.6"/>`;
+    inner += `<line x1="${ox}" y1="${H - 28}" x2="${ox}" y2="36" stroke="#5f7266" stroke-width="1.6"/>`;
+    inner += `<text x="${W - 18}" y="${oy - 8}" fill="#5f7266" font-size="12">x</text>`;
+    inner += `<text x="${ox + 8}" y="40" fill="#5f7266" font-size="12">y</text>`;
+    const xL = sx(-1, xr);
+    const xR = sx(2, xr);
+    inner += `<rect x="${xL}" y="36" width="${xR - xL}" height="${H - 64}" fill="#2f6f4e" opacity="0.08"/>`;
+    inner += circle(xL, oy, true);
+    inner += circle(xR, oy, true);
+    inner += `<text x="${xL}" y="${oy + 22}" text-anchor="middle" fill="#2f6f4e" font-size="13">−1</text>`;
+    inner += `<text x="${xR}" y="${oy + 22}" text-anchor="middle" fill="#2f6f4e" font-size="13">2</text>`;
+
+    if (graph.mode === "curve") {
+      const a = graph.a;
+      const samples = sampleFn((x) => q8Y(a, x), xr);
+      const d = pathFrom(samples, xr, yr);
+      inner += `<path d="${d}" fill="none" stroke="#2f6f4e" stroke-width="2.5" pathLength="1" stroke-dasharray="1" stroke-dashoffset="${(1 - t).toFixed(3)}"/>`;
+      inner += `<text x="${W - 16}" y="24" text-anchor="end" fill="#1a222c" font-size="13">取 a = ${a}</text>`;
+      if (graph.vertex && t > 0.35) {
+        const vx = -a / 2;
+        const px = sx(vx, xr);
+        inner += `<line x1="${px}" y1="58" x2="${px}" y2="${H - 36}" stroke="#3d6ea8" stroke-width="1.4" stroke-dasharray="5 4"/>`;
+        const vLab = "对称轴 x = " + String(vx).replace("-", "−");
+        const vAnchor = vx >= 1 ? "end" : "start";
+        const vLx = vx >= 1 ? px - 8 : px + 8;
+        inner += `<text x="${vLx}" y="86" text-anchor="${vAnchor}" fill="#3d6ea8" font-size="12">${vLab}</text>`;
+      }
+      const legend = [];
+      if (graph.signs && t > 0.55) {
+        [
+          [-1, q8Y(a, -1)],
+          [2, q8Y(a, 2)],
+        ].forEach(([x, y]) => {
+          const cx = sx(x, xr);
+          const pos = y > 0;
+          inner += `<circle cx="${cx}" cy="${sy(y, yr)}" r="5" fill="${pos ? "#2f6f4e" : "#b85c38"}"/>`;
+          legend.push("f(" + (x < 0 ? "−1" : "2") + ") = " + String(y).replace("-", "−"));
+        });
+      }
+      if (graph.root && t > 0.8) {
+        const root = q8Root(a);
+        if (root != null) {
+          const cx = sx(root, xr);
+          inner += `<circle cx="${cx}" cy="${oy}" r="5.5" fill="#b85c38"/>`;
+          legend.push("零点 " + (a < 0 ? "2 − √2" : "−2 + √2"));
+        }
+      }
+      if (legend.length) {
+        inner += `<text x="16" y="${H - 10}" fill="#1a222c" font-size="13">${legend.join("　　")}</text>`;
+      }
+    }
+
+    svg.innerHTML = inner;
+  }
+
   function drawFrame(pack, stepIndex, localT) {
     const svg = $("vsCanvas");
     if (!svg) return;
+    if (pack.scene === "q8") {
+      drawQ8(svg, pack, stepIndex, localT);
+      return;
+    }
     const t = Math.max(0, Math.min(1, localT));
     const scene = pack.scene;
     const pts = pack.points;
@@ -444,6 +634,7 @@
         geometry: "坐标几何：点 → 线 → 关系",
         flow: "计数/概率：分类后汇总",
         board: "思维链：已知 → 转化 → 求解",
+        q8: "二次函数：对称轴把区间分成两种单调情形",
       }[scene] || "解题思路"
     );
   }
@@ -530,7 +721,9 @@
     state.pack = buildSteps(question);
     const dlg = $("vsDialog");
     $("vsTitle").textContent = "第 " + (question.index || "") + " 题 · 可视化解题";
-    $("vsSub").textContent = "用动画把审题、建模、演算串起来，对照下方步骤看“这一步在想什么”。";
+    $("vsSub").textContent =
+      (state.pack && state.pack.subtitle) ||
+      "用动画把审题、建模、演算串起来，对照下方步骤看“这一步在想什么”。";
     dlg.hidden = false;
     stopTimer();
     showStep(0);

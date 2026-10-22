@@ -3,6 +3,14 @@
     "d793894c-ce81-4d98-9f85-a98f435c1ea4": {
       "title": "第3题 · 二次不等式与根的分布",
       "href": "/static/plane-sz-q3.html?embed=1"
+    },
+    "fc66d711-9313-44ea-8398-478803c215f7": {
+      "title": "第8题 · 二次函数的零点与单调",
+      "href": "/static/plane-player.html?scene=/static/scenes/authored/fc66d711-9313-44ea-8398-478803c215f7.json&embed=1"
+    },
+    "489bd062-6b85-4029-8793-7c4dfc6a47af": {
+      "title": "第7题 · 偶函数与单调性解不等式",
+      "href": "/static/plane-player.html?scene=/static/scenes/authored/489bd062-6b85-4029-8793-7c4dfc6a47af.json&embed=1"
     }
   }
 }

@@ -1,0 +1,228 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "title": "第7题 · 偶函数与单调性解不等式",
+  "meta": "按详解逐步作图",
+  "view": {
+    "xMin": -1.4,
+    "xMax": 7.4,
+    "yMin": -18.2,
+    "yMax": 32.2
+  },
+  "curves": [
+    {
+      "id": "f",
+      "preset": "quadratic",
+      "color": "#2457d6",
+      "label": "示意 f(x)=25-x^2",
+      "labelCorner": "left",
+      "quadratic": {
+        "a": -1.0,
+        "b": 0.0,
+        "c": 25.0
+      }
+    }
+  ],
+  "steps": [
+    {
+      "id": "read",
+      "title": "审题：偶函数在 [0,+∞) 递减",
+      "caption": "题目只给性质，取一个满足条件的示意函数 f(x)=25-x^2：它是偶函数，图象关于 y 轴对称，且在 [0,+∞) 上单调递减。要解 f(2x-3)>f(5)，先看 f(5) 在图象上的位置。",
+      "formula": [
+        "f(x)=25-x^2（示意）",
+        "f(5)=0"
+      ],
+      "curves": [
+        "f"
+      ],
+      "intervals": [
+        {
+          "from": 0.0,
+          "to": 6.0,
+          "tone": "down",
+          "label": "[0,+∞) 递减"
+        }
+      ],
+      "markers": [
+        {
+          "x": 5.0,
+          "name": "f(5)",
+          "tone": "down"
+        }
+      ],
+      "guides": [
+        {
+          "label": "对称轴 x=0",
+          "x": 0.0
+        }
+      ],
+      "draw": true,
+      "vertex": {
+        "x": 0.0,
+        "label": "顶点"
+      },
+      "view": {
+        "xMin": -1.4,
+        "xMax": 7.4,
+        "yMin": -18.2,
+        "yMax": 32.2
+      }
+    },
+    {
+      "id": "symmetry",
+      "title": "偶函数：离轴越近函数值越大",
+      "caption": "因为 f(x) 是偶函数，所以 f(-5)=f(5)。在 [0,+∞) 上递减，意味着 x 离 y 轴越近，函数值越大。于是 f(x)>f(5) 等价于 |x|<5，即 -5<x<5。",
+      "formula": [
+        "f(-5)=f(5)",
+        "f(x)>f(5) ⇔ |x|<5"
+      ],
+      "curves": [
+        "f"
+      ],
+      "intervals": [
+        {
+          "from": -5.0,
+          "to": 5.0,
+          "tone": "up",
+          "label": "|x|<5"
+        }
+      ],
+      "markers": [
+        {
+          "x": -5.0,
+          "name": "左端",
+          "tone": "down"
+        },
+        {
+          "x": 5.0,
+          "name": "右端",
+          "tone": "down"
+        }
+      ],
+      "guides": [
+        {
+          "label": "对称轴 x=0",
+          "x": 0.0
+        }
+      ],
+      "draw": true,
+      "vertex": {
+        "x": 0.0,
+        "label": "顶点"
+      },
+      "view": {
+        "xMin": -7.2,
+        "xMax": 7.2,
+        "yMin": -5.0,
+        "yMax": 30.0
+      }
+    },
+    {
+      "id": "substitute",
+      "title": "整体代换：|2x-3|<5",
+      "caption": "把不等式左边看成 f 在 t=2x-3 处的值，右边是 f(5)。由上面的结论，t 必须满足 |t|<5，即 |2x-3|<5。这一步只完成代换，还没有解出 x。",
+      "formula": [
+        "t=2x-3",
+        "|t|<5 ⇒ |2x-3|<5"
+      ],
+      "curves": [
+        "f"
+      ],
+      "intervals": [],
+      "markers": [],
+      "guides": [
+        {
+          "label": "t=-5",
+          "x": -5.0
+        },
+        {
+          "label": "t=5",
+          "x": 5.0
+        }
+      ],
+      "draw": true,
+      "view": {
+        "xMin": -7.2,
+        "xMax": 7.2,
+        "yMin": 24.0,
+        "yMax": 26.0
+      }
+    },
+    {
+      "id": "solve",
+      "title": "解绝对值不等式",
+      "caption": "由 |2x-3|<5 得 -5<2x-3<5。左边解得 2x>-2 即 x>-1；右边解得 2x<8 即 x<4。所以 -1<x<4。",
+      "formula": [
+        "-5<2x-3<5",
+        "-1<x<4"
+      ],
+      "curves": [
+        "f"
+      ],
+      "intervals": [
+        {
+          "from": -1.0,
+          "to": 4.0,
+          "tone": "up",
+          "label": "(-1,4)"
+        }
+      ],
+      "markers": [],
+      "guides": [
+        {
+          "label": "x=-1",
+          "x": -1.0
+        },
+        {
+          "label": "x=4",
+          "x": 4.0
+        }
+      ],
+      "draw": true,
+      "view": {
+        "xMin": -2.4,
+        "xMax": 5.4,
+        "yMin": 5.8,
+        "yMax": 28.2
+      }
+    },
+    {
+      "id": "conclusion",
+      "title": "结论：选 D",
+      "caption": "不等式 f(2x-3)>f(5) 的解集是 (-1,4)，对应选项 D。A 是 |2x-3|>5 的解，即 f(2x-3)<f(5)；B 只取了 x<4 一侧；C 只取了 x>-1 一侧，都不对。",
+      "formula": [
+        "解集：(-1,4)",
+        "选 D"
+      ],
+      "curves": [
+        "f"
+      ],
+      "intervals": [
+        {
+          "from": -1.0,
+          "to": 4.0,
+          "tone": "down",
+          "label": "(-1,4)"
+        }
+      ],
+      "markers": [],
+      "guides": [
+        {
+          "label": "x=-1",
+          "x": -1.0
+        },
+        {
+          "label": "x=4",
+          "x": 4.0
+        }
+      ],
+      "draw": true,
+      "view": {
+        "xMin": -2.4,
+        "xMax": 5.4,
+        "yMin": 5.8,
+        "yMax": 28.2
+      }
+    }
+  ]
+}

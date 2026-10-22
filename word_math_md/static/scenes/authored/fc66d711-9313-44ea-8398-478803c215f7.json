@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "engine": "plane",
+  "title": "第8题 · 二次函数的零点与单调",
+  "meta": "按详解逐步作图",
+  "view": {
+    "xMin": -2.4,
+    "xMax": 3.4,
+    "yMin": -3.8,
+    "yMax": 8.8
+  },
+  "curves": [
+    {
+      "id": "c1",
+      "preset": "quadratic",
+      "color": "#2457d6",
+      "label": "a=-4 时 y=x^2-4x+2",
+      "labelCorner": "left",
+      "quadratic": {
+        "a": 1.0,
+        "b": -4.0,
+        "c": 2.0
+      }
+    },
+    {
+      "id": "c2",
+      "preset": "quadratic",
+      "color": "#d64545",
+      "label": "a=4 时 y=x^2+4x+2",
+      "labelCorner": "left",
+      "quadratic": {
+        "a": 1.0,
+        "b": 4.0,
+        "c": 2.0
+      }
+    },
+    {
+      "id": "num",
+      "preset": "quadratic",
+      "color": "#333333",
+      "label": "数轴",
+      "labelCorner": "left",
+      "quadratic": {
+        "a": 0.0,
+        "b": 0.0,
+        "c": 0.0
+      }
+    }
+  ],
+  "steps": [
+    {
+      "id": "step1",
+      "title": "审题并取 a=-4 看单调性",
+      "caption": "题目要求 f(x)=x^2+ax+2 在区间 (-1,2) 上单调且恰有一个零点。先以 a=-4 为例：曲线为 y=x^2-4x+2，对称轴 x=2，区间 (-1,2) 位于对称轴左侧，函数单调递减，符合“单调”的要求。",
+      "formula": [
+        "f(x)=x^2+ax+2",
+        "\\text{对称轴 }x=-\\frac{a}{2}"
+      ],
+      "curves": [
+        "c1"
+      ],
+      "intervals": [
+        {
+          "from": -1.0,
+          "to": 2.0,
+          "tone": "down",
+          "label": "(-1,2) 递减"
+        }
+      ],
+      "markers": [],
+      "guides": [
+        {
+          "label": "对称轴 x=2",
+          "x": 2.0
+        }
+      ],
+      "draw": true,
+      "vertex": {
+        "x": 2.0,
+        "label": "顶点"
+      },
+      "view": {
+        "xMin": -2.4,
+        "xMax": 3.4,
+        "yMin": -3.8,
+        "yMax": 8.8
+      }
+    },
+    {
+      "id": "step2",
+      "title": "比较 a=-4 时区间两端函数值",
+      "caption": "在 a=-4 时计算端点值：f(-1)=1+4+2=7>0，f(2)=4-8+2=-2<0。端点异号，由零点存在定理，(-1,2) 内恰有一个零点，满足题意。",
+      "formula": [
+        "f(-1)=7>0",
+        "f(2)=-2<0"
+      ],
+      "curves": [
+        "c1"
+      ],
+      "intervals": [
+        {
+          "from": -1.0,
+          "to": 2.0,
+          "tone": "down",
+          "label": "(-1,2) 递减"
+        }
+      ],
+      "markers": [
+        {
+          "x": -1.0,
+          "name": "左端",
+          "tone": "up"
+        },
+        {
+          "x": 2.0,
+          "name": "右端",
+          "tone": "down"
+        }
+      ],
+      "guides": [
+        {
+          "label": "对称轴 x=2",
+          "x": 2.0
+        }
+      ],
+      "draw": true,
+      "vertex": {
+        "x": 2.0,
+        "label": "顶点"
+      },
+      "view": {
+        "xMin": -2.4,
+        "xMax": 3.4,
+        "yMin": -3.8,
+        "yMax": 8.8
+      }
+    },
+    {
+      "id": "step3",
+      "title": "情况一：对称轴在区间右侧",
+      "caption": "情况一：对称轴在区间右侧，即 -a/2≥2。同时需要 f(-1)>0、f(2)<0，即 3-a>0 且 6+2a<0。综合得 a≤-4，对应数轴上 (-∞,-4] 这段。",
+      "formula": [
+        "-\\frac{a}{2}\\ge 2",
+        "f(-1)=3-a>0",
+        "f(2)=6+2a<0",
+        "\\Rightarrow a\\le -4"
+      ],
+      "curves": [
+        "num"
+      ],
+      "intervals": [
+        {
+          "from": -8.0,
+          "to": -4.0,
+          "tone": "down",
+          "label": "a≤-4"
+        }
+      ],
+      "markers": [],
+      "guides": [
+        {
+          "label": "边界 a=-4",
+          "x": -4.0
+        }
+      ],
+      "draw": false,
+      "view": {
+        "xMin": -9.4,
+        "xMax": -2.6,
+        "yMin": -1.0,
+        "yMax": 1.0
+      }
+    },
+    {
+      "id": "step4",
+      "title": "情况二：取 a=4 验证递增",
+      "caption": "情况二：取 a=4，曲线 y=x^2+4x+2，对称轴 x=-2 在区间左侧，(-1,2) 上单调递增。此时 f(-1)=-1<0，f(2)=14>0，端点异号，区间内恰有一个零点。",
+      "formula": [
+        "a=4",
+        "f(-1)=-1<0",
+        "f(2)=14>0"
+      ],
+      "curves": [
+        "c2"
+      ],
+      "intervals": [
+        {
+          "from": -1.0,
+          "to": 2.0,
+          "tone": "up",
+          "label": "(-1,2) 递增"
+        }
+      ],
+      "markers": [
+        {
+          "x": -1.0,
+          "name": "左端",
+          "tone": "down"
+        },
+        {
+          "x": 2.0,
+          "name": "右端",
+          "tone": "up"
+        }
+      ],
+      "guides": [
+        {
+          "label": "对称轴 x=-2",
+          "x": -2.0
+        }
+      ],
+      "draw": true,
+      "vertex": {
+        "x": -2.0,
+        "label": "顶点"
+      },
+      "view": {
+        "xMin": -3.4,
+        "xMax": 3.4,
+        "yMin": -5.2,
+        "yMax": 17.2
+      }
+    },
+    {
+      "id": "step5",
+      "title": "综合两种情况得答案",
+      "caption": "两种情形合并：情况一得 a≤-4；情况二要求 -a/2≤-1 且 f(-1)<0、f(2)>0，解得 a>3。所以 a∈(-∞,-4]∪(3,+∞)，选 C。",
+      "formula": [
+        "a\\le -4 \\text{ 或 } a>3",
+        "(-\\infty,-4]\\cup(3,+\\infty)",
+        "\\text{选 C}"
+      ],
+      "curves": [
+        "num"
+      ],
+      "intervals": [
+        {
+          "from": -8.0,
+          "to": -4.0,
+          "tone": "down",
+          "label": "(-∞,-4]"
+        },
+        {
+          "from": 3.0,
+          "to": 8.0,
+          "tone": "up",
+          "label": "(3,+∞)"
+        }
+      ],
+      "markers": [],
+      "guides": [
+        {
+          "label": "a=-4",
+          "x": -4.0
+        },
+        {
+          "label": "a=3",
+          "x": 3.0
+        }
+      ],
+      "draw": false,
+      "view": {
+        "xMin": -11.52,
+        "xMax": 11.52,
+        "yMin": -1.0,
+        "yMax": 1.0
+      }
+    }
+  ]
+}
